@@ -1,0 +1,2342 @@
+# Feature Format Diff Report
+
+## training_2025_enhanced.csv columns (47)
+
+- game_date
+- home_team
+- away_team
+- home_pitcher_mlbam
+- away_pitcher_mlbam
+- home_pitcher_retro
+- away_pitcher_retro
+- home_pitcher_name
+- away_pitcher_name
+- season
+- home_runs
+- away_runs
+- home_win
+- home_p_ERA
+- home_p_WHIP
+- home_p_K%
+- home_p_BB%
+- home_p_K-BB%
+- home_p_FIP
+- home_p_xFIP
+- home_p_SIERA
+- home_p_WAR
+- home_p_IP
+- away_p_ERA
+- away_p_WHIP
+- away_p_K%
+- away_p_BB%
+- away_p_K-BB%
+- away_p_FIP
+- away_p_xFIP
+- away_p_SIERA
+- away_p_WAR
+- away_p_IP
+- home_bp_ERA
+- home_bp_WHIP
+- home_bp_K/9
+- home_bp_BB/9
+- home_bp_K%
+- home_bp_BB%
+- home_bp_FIP
+- away_bp_ERA
+- away_bp_WHIP
+- away_bp_K/9
+- away_bp_BB/9
+- away_bp_K%
+- away_bp_BB%
+- away_bp_FIP
+
+
+## historical_features_v4.csv columns (2287)
+
+- game_date_x
+- home_team
+- away_team
+- home_pitcher_mlbam
+- away_pitcher_mlbam
+- home_pitcher_retro
+- away_pitcher_retro
+- home_pitcher_name
+- away_pitcher_name
+- season
+- home_score
+- away_score
+- home_win
+- game_key
+- game_date_y
+- home_roll5_runs_scored_mean
+- home_roll5_runs_scored_sum
+- home_roll5_runs_allowed_mean
+- home_roll5_runs_allowed_sum
+- home_roll5_run_diff_mean
+- home_roll5_run_diff_sum
+- home_roll5_win_mean
+- home_roll5_win_sum
+- home_roll15_runs_scored_mean
+- home_roll15_runs_scored_sum
+- home_roll15_runs_allowed_mean
+- home_roll15_runs_allowed_sum
+- home_roll15_run_diff_mean
+- home_roll15_run_diff_sum
+- home_roll15_win_mean
+- home_roll15_win_sum
+- home_roll30_runs_scored_mean
+- home_roll30_runs_scored_sum
+- home_roll30_runs_allowed_mean
+- home_roll30_runs_allowed_sum
+- home_roll30_run_diff_mean
+- home_roll30_run_diff_sum
+- home_roll30_win_mean
+- home_roll30_win_sum
+- home_ha_roll5_runs_scored_mean
+- home_ha_roll5_runs_allowed_mean
+- home_ha_roll5_win_mean
+- home_ha_roll15_runs_scored_mean
+- home_ha_roll15_runs_allowed_mean
+- home_ha_roll15_win_mean
+- home_ha_roll30_runs_scored_mean
+- home_ha_roll30_runs_allowed_mean
+- home_ha_roll30_win_mean
+- home_rest_days
+- home_bullpen_prev_runs_allowed
+- home_bullpen_ra_last3
+- game_date
+- away_roll5_runs_scored_mean
+- away_roll5_runs_scored_sum
+- away_roll5_runs_allowed_mean
+- away_roll5_runs_allowed_sum
+- away_roll5_run_diff_mean
+- away_roll5_run_diff_sum
+- away_roll5_win_mean
+- away_roll5_win_sum
+- away_roll15_runs_scored_mean
+- away_roll15_runs_scored_sum
+- away_roll15_runs_allowed_mean
+- away_roll15_runs_allowed_sum
+- away_roll15_run_diff_mean
+- away_roll15_run_diff_sum
+- away_roll15_win_mean
+- away_roll15_win_sum
+- away_roll30_runs_scored_mean
+- away_roll30_runs_scored_sum
+- away_roll30_runs_allowed_mean
+- away_roll30_runs_allowed_sum
+- away_roll30_run_diff_mean
+- away_roll30_run_diff_sum
+- away_roll30_win_mean
+- away_roll30_win_sum
+- away_ha_roll5_runs_scored_mean
+- away_ha_roll5_runs_allowed_mean
+- away_ha_roll5_win_mean
+- away_ha_roll15_runs_scored_mean
+- away_ha_roll15_runs_allowed_mean
+- away_ha_roll15_win_mean
+- away_ha_roll30_runs_scored_mean
+- away_ha_roll30_runs_allowed_mean
+- away_ha_roll30_win_mean
+- away_rest_days
+- away_bullpen_prev_runs_allowed
+- away_bullpen_ra_last3
+- home_bat_IDfg
+- home_bat_Season
+- home_bat_Age
+- home_bat_G
+- home_bat_AB
+- home_bat_PA
+- home_bat_H
+- home_bat_1B
+- home_bat_2B
+- home_bat_3B
+- home_bat_HR
+- home_bat_R
+- home_bat_RBI
+- home_bat_BB
+- home_bat_IBB
+- home_bat_SO
+- home_bat_HBP
+- home_bat_SF
+- home_bat_SH
+- home_bat_GDP
+- home_bat_SB
+- home_bat_CS
+- home_bat_AVG
+- home_bat_GB
+- home_bat_FB
+- home_bat_LD
+- home_bat_IFFB
+- home_bat_Pitches
+- home_bat_Balls
+- home_bat_Strikes
+- home_bat_IFH
+- home_bat_BU
+- home_bat_BUH
+- home_bat_BB%
+- home_bat_K%
+- home_bat_BB/K
+- home_bat_OBP
+- home_bat_SLG
+- home_bat_OPS
+- home_bat_ISO
+- home_bat_BABIP
+- home_bat_GB/FB
+- home_bat_LD%
+- home_bat_GB%
+- home_bat_FB%
+- home_bat_IFFB%
+- home_bat_HR/FB
+- home_bat_IFH%
+- home_bat_BUH%
+- home_bat_wOBA
+- home_bat_wRAA
+- home_bat_wRC
+- home_bat_Bat
+- home_bat_Fld
+- home_bat_Rep
+- home_bat_Pos
+- home_bat_RAR
+- home_bat_WAR
+- home_bat_Dol
+- home_bat_Spd
+- home_bat_wRC+
+- home_bat_WPA
+- home_bat_-WPA
+- home_bat_+WPA
+- home_bat_RE24
+- home_bat_REW
+- home_bat_pLI
+- home_bat_phLI
+- home_bat_PH
+- home_bat_WPA/LI
+- home_bat_Clutch
+- home_bat_FB% (Pitch)
+- home_bat_FBv
+- home_bat_SL%
+- home_bat_SLv
+- home_bat_CT%
+- home_bat_CTv
+- home_bat_CB%
+- home_bat_CBv
+- home_bat_CH%
+- home_bat_CHv
+- home_bat_SF%
+- home_bat_SFv
+- home_bat_KN%
+- home_bat_KNv
+- home_bat_XX%
+- home_bat_PO%
+- home_bat_wFB
+- home_bat_wSL
+- home_bat_wCT
+- home_bat_wCB
+- home_bat_wCH
+- home_bat_wSF
+- home_bat_wKN
+- home_bat_wFB/C
+- home_bat_wSL/C
+- home_bat_wCT/C
+- home_bat_wCB/C
+- home_bat_wCH/C
+- home_bat_wSF/C
+- home_bat_wKN/C
+- home_bat_O-Swing%
+- home_bat_Z-Swing%
+- home_bat_Swing%
+- home_bat_O-Contact%
+- home_bat_Z-Contact%
+- home_bat_Contact%
+- home_bat_Zone%
+- home_bat_F-Strike%
+- home_bat_SwStr%
+- home_bat_BsR
+- home_bat_FA% (sc)
+- home_bat_FT% (sc)
+- home_bat_FC% (sc)
+- home_bat_FS% (sc)
+- home_bat_FO% (sc)
+- home_bat_SI% (sc)
+- home_bat_SL% (sc)
+- home_bat_CU% (sc)
+- home_bat_KC% (sc)
+- home_bat_EP% (sc)
+- home_bat_CH% (sc)
+- home_bat_SC% (sc)
+- home_bat_KN% (sc)
+- home_bat_UN% (sc)
+- home_bat_vFA (sc)
+- home_bat_vFT (sc)
+- home_bat_vFC (sc)
+- home_bat_vFS (sc)
+- home_bat_vFO (sc)
+- home_bat_vSI (sc)
+- home_bat_vSL (sc)
+- home_bat_vCU (sc)
+- home_bat_vKC (sc)
+- home_bat_vEP (sc)
+- home_bat_vCH (sc)
+- home_bat_vSC (sc)
+- home_bat_vKN (sc)
+- home_bat_FA-X (sc)
+- home_bat_FT-X (sc)
+- home_bat_FC-X (sc)
+- home_bat_FS-X (sc)
+- home_bat_FO-X (sc)
+- home_bat_SI-X (sc)
+- home_bat_SL-X (sc)
+- home_bat_CU-X (sc)
+- home_bat_KC-X (sc)
+- home_bat_EP-X (sc)
+- home_bat_CH-X (sc)
+- home_bat_SC-X (sc)
+- home_bat_KN-X (sc)
+- home_bat_FA-Z (sc)
+- home_bat_FT-Z (sc)
+- home_bat_FC-Z (sc)
+- home_bat_FS-Z (sc)
+- home_bat_FO-Z (sc)
+- home_bat_SI-Z (sc)
+- home_bat_SL-Z (sc)
+- home_bat_CU-Z (sc)
+- home_bat_KC-Z (sc)
+- home_bat_EP-Z (sc)
+- home_bat_CH-Z (sc)
+- home_bat_SC-Z (sc)
+- home_bat_KN-Z (sc)
+- home_bat_wFA (sc)
+- home_bat_wFT (sc)
+- home_bat_wFC (sc)
+- home_bat_wFS (sc)
+- home_bat_wFO (sc)
+- home_bat_wSI (sc)
+- home_bat_wSL (sc)
+- home_bat_wCU (sc)
+- home_bat_wKC (sc)
+- home_bat_wEP (sc)
+- home_bat_wCH (sc)
+- home_bat_wSC (sc)
+- home_bat_wKN (sc)
+- home_bat_wFA/C (sc)
+- home_bat_wFT/C (sc)
+- home_bat_wFC/C (sc)
+- home_bat_wFS/C (sc)
+- home_bat_wFO/C (sc)
+- home_bat_wSI/C (sc)
+- home_bat_wSL/C (sc)
+- home_bat_wCU/C (sc)
+- home_bat_wKC/C (sc)
+- home_bat_wEP/C (sc)
+- home_bat_wCH/C (sc)
+- home_bat_wSC/C (sc)
+- home_bat_wKN/C (sc)
+- home_bat_O-Swing% (sc)
+- home_bat_Z-Swing% (sc)
+- home_bat_Swing% (sc)
+- home_bat_O-Contact% (sc)
+- home_bat_Z-Contact% (sc)
+- home_bat_Contact% (sc)
+- home_bat_Zone% (sc)
+- home_bat_Pace
+- home_bat_Def
+- home_bat_wSB
+- home_bat_UBR
+- home_bat_Age Rng
+- home_bat_Off
+- home_bat_Lg
+- home_bat_wGDP
+- home_bat_Pull%
+- home_bat_Cent%
+- home_bat_Oppo%
+- home_bat_Soft%
+- home_bat_Med%
+- home_bat_Hard%
+- home_bat_TTO%
+- home_bat_CH% (pi)
+- home_bat_CS% (pi)
+- home_bat_CU% (pi)
+- home_bat_FA% (pi)
+- home_bat_FC% (pi)
+- home_bat_FS% (pi)
+- home_bat_KN% (pi)
+- home_bat_SB% (pi)
+- home_bat_SI% (pi)
+- home_bat_SL% (pi)
+- home_bat_XX% (pi)
+- home_bat_vCH (pi)
+- home_bat_vCS (pi)
+- home_bat_vCU (pi)
+- home_bat_vFA (pi)
+- home_bat_vFC (pi)
+- home_bat_vFS (pi)
+- home_bat_vKN (pi)
+- home_bat_vSB (pi)
+- home_bat_vSI (pi)
+- home_bat_vSL (pi)
+- home_bat_vXX (pi)
+- home_bat_CH-X (pi)
+- home_bat_CS-X (pi)
+- home_bat_CU-X (pi)
+- home_bat_FA-X (pi)
+- home_bat_FC-X (pi)
+- home_bat_FS-X (pi)
+- home_bat_KN-X (pi)
+- home_bat_SB-X (pi)
+- home_bat_SI-X (pi)
+- home_bat_SL-X (pi)
+- home_bat_XX-X (pi)
+- home_bat_CH-Z (pi)
+- home_bat_CS-Z (pi)
+- home_bat_CU-Z (pi)
+- home_bat_FA-Z (pi)
+- home_bat_FC-Z (pi)
+- home_bat_FS-Z (pi)
+- home_bat_KN-Z (pi)
+- home_bat_SB-Z (pi)
+- home_bat_SI-Z (pi)
+- home_bat_SL-Z (pi)
+- home_bat_XX-Z (pi)
+- home_bat_wCH (pi)
+- home_bat_wCS (pi)
+- home_bat_wCU (pi)
+- home_bat_wFA (pi)
+- home_bat_wFC (pi)
+- home_bat_wFS (pi)
+- home_bat_wKN (pi)
+- home_bat_wSB (pi)
+- home_bat_wSI (pi)
+- home_bat_wSL (pi)
+- home_bat_wXX (pi)
+- home_bat_wCH/C (pi)
+- home_bat_wCS/C (pi)
+- home_bat_wCU/C (pi)
+- home_bat_wFA/C (pi)
+- home_bat_wFC/C (pi)
+- home_bat_wFS/C (pi)
+- home_bat_wKN/C (pi)
+- home_bat_wSB/C (pi)
+- home_bat_wSI/C (pi)
+- home_bat_wSL/C (pi)
+- home_bat_wXX/C (pi)
+- home_bat_O-Swing% (pi)
+- home_bat_Z-Swing% (pi)
+- home_bat_Swing% (pi)
+- home_bat_O-Contact% (pi)
+- home_bat_Z-Contact% (pi)
+- home_bat_Contact% (pi)
+- home_bat_Zone% (pi)
+- home_bat_Pace (pi)
+- home_bat_FRM
+- home_bat_AVG+
+- home_bat_BB%+
+- home_bat_K%+
+- home_bat_OBP+
+- home_bat_SLG+
+- home_bat_ISO+
+- home_bat_BABIP+
+- home_bat_LD+%
+- home_bat_GB%+
+- home_bat_FB%+
+- home_bat_HR/FB%+
+- home_bat_Pull%+
+- home_bat_Cent%+
+- home_bat_Oppo%+
+- home_bat_Soft%+
+- home_bat_Med%+
+- home_bat_Hard%+
+- home_bat_EV
+- home_bat_LA
+- home_bat_Barrels
+- home_bat_Barrel%
+- home_bat_maxEV
+- home_bat_HardHit
+- home_bat_HardHit%
+- home_bat_Events
+- home_bat_CStr%
+- home_bat_CSW%
+- home_bat_xBA
+- home_bat_xSLG
+- home_bat_xwOBA
+- home_bat_L-WAR
+- away_bat_IDfg
+- away_bat_Season
+- away_bat_Age
+- away_bat_G
+- away_bat_AB
+- away_bat_PA
+- away_bat_H
+- away_bat_1B
+- away_bat_2B
+- away_bat_3B
+- away_bat_HR
+- away_bat_R
+- away_bat_RBI
+- away_bat_BB
+- away_bat_IBB
+- away_bat_SO
+- away_bat_HBP
+- away_bat_SF
+- away_bat_SH
+- away_bat_GDP
+- away_bat_SB
+- away_bat_CS
+- away_bat_AVG
+- away_bat_GB
+- away_bat_FB
+- away_bat_LD
+- away_bat_IFFB
+- away_bat_Pitches
+- away_bat_Balls
+- away_bat_Strikes
+- away_bat_IFH
+- away_bat_BU
+- away_bat_BUH
+- away_bat_BB%
+- away_bat_K%
+- away_bat_BB/K
+- away_bat_OBP
+- away_bat_SLG
+- away_bat_OPS
+- away_bat_ISO
+- away_bat_BABIP
+- away_bat_GB/FB
+- away_bat_LD%
+- away_bat_GB%
+- away_bat_FB%
+- away_bat_IFFB%
+- away_bat_HR/FB
+- away_bat_IFH%
+- away_bat_BUH%
+- away_bat_wOBA
+- away_bat_wRAA
+- away_bat_wRC
+- away_bat_Bat
+- away_bat_Fld
+- away_bat_Rep
+- away_bat_Pos
+- away_bat_RAR
+- away_bat_WAR
+- away_bat_Dol
+- away_bat_Spd
+- away_bat_wRC+
+- away_bat_WPA
+- away_bat_-WPA
+- away_bat_+WPA
+- away_bat_RE24
+- away_bat_REW
+- away_bat_pLI
+- away_bat_phLI
+- away_bat_PH
+- away_bat_WPA/LI
+- away_bat_Clutch
+- away_bat_FB% (Pitch)
+- away_bat_FBv
+- away_bat_SL%
+- away_bat_SLv
+- away_bat_CT%
+- away_bat_CTv
+- away_bat_CB%
+- away_bat_CBv
+- away_bat_CH%
+- away_bat_CHv
+- away_bat_SF%
+- away_bat_SFv
+- away_bat_KN%
+- away_bat_KNv
+- away_bat_XX%
+- away_bat_PO%
+- away_bat_wFB
+- away_bat_wSL
+- away_bat_wCT
+- away_bat_wCB
+- away_bat_wCH
+- away_bat_wSF
+- away_bat_wKN
+- away_bat_wFB/C
+- away_bat_wSL/C
+- away_bat_wCT/C
+- away_bat_wCB/C
+- away_bat_wCH/C
+- away_bat_wSF/C
+- away_bat_wKN/C
+- away_bat_O-Swing%
+- away_bat_Z-Swing%
+- away_bat_Swing%
+- away_bat_O-Contact%
+- away_bat_Z-Contact%
+- away_bat_Contact%
+- away_bat_Zone%
+- away_bat_F-Strike%
+- away_bat_SwStr%
+- away_bat_BsR
+- away_bat_FA% (sc)
+- away_bat_FT% (sc)
+- away_bat_FC% (sc)
+- away_bat_FS% (sc)
+- away_bat_FO% (sc)
+- away_bat_SI% (sc)
+- away_bat_SL% (sc)
+- away_bat_CU% (sc)
+- away_bat_KC% (sc)
+- away_bat_EP% (sc)
+- away_bat_CH% (sc)
+- away_bat_SC% (sc)
+- away_bat_KN% (sc)
+- away_bat_UN% (sc)
+- away_bat_vFA (sc)
+- away_bat_vFT (sc)
+- away_bat_vFC (sc)
+- away_bat_vFS (sc)
+- away_bat_vFO (sc)
+- away_bat_vSI (sc)
+- away_bat_vSL (sc)
+- away_bat_vCU (sc)
+- away_bat_vKC (sc)
+- away_bat_vEP (sc)
+- away_bat_vCH (sc)
+- away_bat_vSC (sc)
+- away_bat_vKN (sc)
+- away_bat_FA-X (sc)
+- away_bat_FT-X (sc)
+- away_bat_FC-X (sc)
+- away_bat_FS-X (sc)
+- away_bat_FO-X (sc)
+- away_bat_SI-X (sc)
+- away_bat_SL-X (sc)
+- away_bat_CU-X (sc)
+- away_bat_KC-X (sc)
+- away_bat_EP-X (sc)
+- away_bat_CH-X (sc)
+- away_bat_SC-X (sc)
+- away_bat_KN-X (sc)
+- away_bat_FA-Z (sc)
+- away_bat_FT-Z (sc)
+- away_bat_FC-Z (sc)
+- away_bat_FS-Z (sc)
+- away_bat_FO-Z (sc)
+- away_bat_SI-Z (sc)
+- away_bat_SL-Z (sc)
+- away_bat_CU-Z (sc)
+- away_bat_KC-Z (sc)
+- away_bat_EP-Z (sc)
+- away_bat_CH-Z (sc)
+- away_bat_SC-Z (sc)
+- away_bat_KN-Z (sc)
+- away_bat_wFA (sc)
+- away_bat_wFT (sc)
+- away_bat_wFC (sc)
+- away_bat_wFS (sc)
+- away_bat_wFO (sc)
+- away_bat_wSI (sc)
+- away_bat_wSL (sc)
+- away_bat_wCU (sc)
+- away_bat_wKC (sc)
+- away_bat_wEP (sc)
+- away_bat_wCH (sc)
+- away_bat_wSC (sc)
+- away_bat_wKN (sc)
+- away_bat_wFA/C (sc)
+- away_bat_wFT/C (sc)
+- away_bat_wFC/C (sc)
+- away_bat_wFS/C (sc)
+- away_bat_wFO/C (sc)
+- away_bat_wSI/C (sc)
+- away_bat_wSL/C (sc)
+- away_bat_wCU/C (sc)
+- away_bat_wKC/C (sc)
+- away_bat_wEP/C (sc)
+- away_bat_wCH/C (sc)
+- away_bat_wSC/C (sc)
+- away_bat_wKN/C (sc)
+- away_bat_O-Swing% (sc)
+- away_bat_Z-Swing% (sc)
+- away_bat_Swing% (sc)
+- away_bat_O-Contact% (sc)
+- away_bat_Z-Contact% (sc)
+- away_bat_Contact% (sc)
+- away_bat_Zone% (sc)
+- away_bat_Pace
+- away_bat_Def
+- away_bat_wSB
+- away_bat_UBR
+- away_bat_Age Rng
+- away_bat_Off
+- away_bat_Lg
+- away_bat_wGDP
+- away_bat_Pull%
+- away_bat_Cent%
+- away_bat_Oppo%
+- away_bat_Soft%
+- away_bat_Med%
+- away_bat_Hard%
+- away_bat_TTO%
+- away_bat_CH% (pi)
+- away_bat_CS% (pi)
+- away_bat_CU% (pi)
+- away_bat_FA% (pi)
+- away_bat_FC% (pi)
+- away_bat_FS% (pi)
+- away_bat_KN% (pi)
+- away_bat_SB% (pi)
+- away_bat_SI% (pi)
+- away_bat_SL% (pi)
+- away_bat_XX% (pi)
+- away_bat_vCH (pi)
+- away_bat_vCS (pi)
+- away_bat_vCU (pi)
+- away_bat_vFA (pi)
+- away_bat_vFC (pi)
+- away_bat_vFS (pi)
+- away_bat_vKN (pi)
+- away_bat_vSB (pi)
+- away_bat_vSI (pi)
+- away_bat_vSL (pi)
+- away_bat_vXX (pi)
+- away_bat_CH-X (pi)
+- away_bat_CS-X (pi)
+- away_bat_CU-X (pi)
+- away_bat_FA-X (pi)
+- away_bat_FC-X (pi)
+- away_bat_FS-X (pi)
+- away_bat_KN-X (pi)
+- away_bat_SB-X (pi)
+- away_bat_SI-X (pi)
+- away_bat_SL-X (pi)
+- away_bat_XX-X (pi)
+- away_bat_CH-Z (pi)
+- away_bat_CS-Z (pi)
+- away_bat_CU-Z (pi)
+- away_bat_FA-Z (pi)
+- away_bat_FC-Z (pi)
+- away_bat_FS-Z (pi)
+- away_bat_KN-Z (pi)
+- away_bat_SB-Z (pi)
+- away_bat_SI-Z (pi)
+- away_bat_SL-Z (pi)
+- away_bat_XX-Z (pi)
+- away_bat_wCH (pi)
+- away_bat_wCS (pi)
+- away_bat_wCU (pi)
+- away_bat_wFA (pi)
+- away_bat_wFC (pi)
+- away_bat_wFS (pi)
+- away_bat_wKN (pi)
+- away_bat_wSB (pi)
+- away_bat_wSI (pi)
+- away_bat_wSL (pi)
+- away_bat_wXX (pi)
+- away_bat_wCH/C (pi)
+- away_bat_wCS/C (pi)
+- away_bat_wCU/C (pi)
+- away_bat_wFA/C (pi)
+- away_bat_wFC/C (pi)
+- away_bat_wFS/C (pi)
+- away_bat_wKN/C (pi)
+- away_bat_wSB/C (pi)
+- away_bat_wSI/C (pi)
+- away_bat_wSL/C (pi)
+- away_bat_wXX/C (pi)
+- away_bat_O-Swing% (pi)
+- away_bat_Z-Swing% (pi)
+- away_bat_Swing% (pi)
+- away_bat_O-Contact% (pi)
+- away_bat_Z-Contact% (pi)
+- away_bat_Contact% (pi)
+- away_bat_Zone% (pi)
+- away_bat_Pace (pi)
+- away_bat_FRM
+- away_bat_AVG+
+- away_bat_BB%+
+- away_bat_K%+
+- away_bat_OBP+
+- away_bat_SLG+
+- away_bat_ISO+
+- away_bat_BABIP+
+- away_bat_LD+%
+- away_bat_GB%+
+- away_bat_FB%+
+- away_bat_HR/FB%+
+- away_bat_Pull%+
+- away_bat_Cent%+
+- away_bat_Oppo%+
+- away_bat_Soft%+
+- away_bat_Med%+
+- away_bat_Hard%+
+- away_bat_EV
+- away_bat_LA
+- away_bat_Barrels
+- away_bat_Barrel%
+- away_bat_maxEV
+- away_bat_HardHit
+- away_bat_HardHit%
+- away_bat_Events
+- away_bat_CStr%
+- away_bat_CSW%
+- away_bat_xBA
+- away_bat_xSLG
+- away_bat_xwOBA
+- away_bat_L-WAR
+- home_pit_IDfg
+- home_pit_Season
+- home_pit_Age
+- home_pit_W
+- home_pit_L
+- home_pit_WAR
+- home_pit_ERA
+- home_pit_G
+- home_pit_GS
+- home_pit_CG
+- home_pit_ShO
+- home_pit_SV
+- home_pit_BS
+- home_pit_IP
+- home_pit_TBF
+- home_pit_H
+- home_pit_R
+- home_pit_ER
+- home_pit_HR
+- home_pit_BB
+- home_pit_IBB
+- home_pit_HBP
+- home_pit_WP
+- home_pit_BK
+- home_pit_SO
+- home_pit_GB
+- home_pit_FB
+- home_pit_LD
+- home_pit_IFFB
+- home_pit_Balls
+- home_pit_Strikes
+- home_pit_Pitches
+- home_pit_RS
+- home_pit_IFH
+- home_pit_BU
+- home_pit_BUH
+- home_pit_K/9
+- home_pit_BB/9
+- home_pit_K/BB
+- home_pit_H/9
+- home_pit_HR/9
+- home_pit_AVG
+- home_pit_WHIP
+- home_pit_BABIP
+- home_pit_LOB%
+- home_pit_FIP
+- home_pit_GB/FB
+- home_pit_LD%
+- home_pit_GB%
+- home_pit_FB%
+- home_pit_IFFB%
+- home_pit_HR/FB
+- home_pit_IFH%
+- home_pit_BUH%
+- home_pit_Starting
+- home_pit_Start-IP
+- home_pit_Relieving
+- home_pit_Relief-IP
+- home_pit_RAR
+- home_pit_Dollars
+- home_pit_tERA
+- home_pit_xFIP
+- home_pit_WPA
+- home_pit_-WPA
+- home_pit_+WPA
+- home_pit_RE24
+- home_pit_REW
+- home_pit_pLI
+- home_pit_inLI
+- home_pit_gmLI
+- home_pit_exLI
+- home_pit_Pulls
+- home_pit_WPA/LI
+- home_pit_Clutch
+- home_pit_FB% 2
+- home_pit_FBv
+- home_pit_SL%
+- home_pit_SLv
+- home_pit_CT%
+- home_pit_CTv
+- home_pit_CB%
+- home_pit_CBv
+- home_pit_CH%
+- home_pit_CHv
+- home_pit_SF%
+- home_pit_SFv
+- home_pit_KN%
+- home_pit_KNv
+- home_pit_XX%
+- home_pit_PO%
+- home_pit_wFB
+- home_pit_wSL
+- home_pit_wCT
+- home_pit_wCB
+- home_pit_wCH
+- home_pit_wSF
+- home_pit_wKN
+- home_pit_wFB/C
+- home_pit_wSL/C
+- home_pit_wCT/C
+- home_pit_wCB/C
+- home_pit_wCH/C
+- home_pit_wSF/C
+- home_pit_wKN/C
+- home_pit_O-Swing%
+- home_pit_Z-Swing%
+- home_pit_Swing%
+- home_pit_O-Contact%
+- home_pit_Z-Contact%
+- home_pit_Contact%
+- home_pit_Zone%
+- home_pit_F-Strike%
+- home_pit_SwStr%
+- home_pit_HLD
+- home_pit_SD
+- home_pit_MD
+- home_pit_ERA-
+- home_pit_FIP-
+- home_pit_xFIP-
+- home_pit_K%
+- home_pit_BB%
+- home_pit_SIERA
+- home_pit_RS/9
+- home_pit_E-F
+- home_pit_FA% (sc)
+- home_pit_FT% (sc)
+- home_pit_FC% (sc)
+- home_pit_FS% (sc)
+- home_pit_FO% (sc)
+- home_pit_SI% (sc)
+- home_pit_SL% (sc)
+- home_pit_CU% (sc)
+- home_pit_KC% (sc)
+- home_pit_EP% (sc)
+- home_pit_CH% (sc)
+- home_pit_SC% (sc)
+- home_pit_KN% (sc)
+- home_pit_UN% (sc)
+- home_pit_vFA (sc)
+- home_pit_vFT (sc)
+- home_pit_vFC (sc)
+- home_pit_vFS (sc)
+- home_pit_vFO (sc)
+- home_pit_vSI (sc)
+- home_pit_vSL (sc)
+- home_pit_vCU (sc)
+- home_pit_vKC (sc)
+- home_pit_vEP (sc)
+- home_pit_vCH (sc)
+- home_pit_vSC (sc)
+- home_pit_vKN (sc)
+- home_pit_FA-X (sc)
+- home_pit_FT-X (sc)
+- home_pit_FC-X (sc)
+- home_pit_FS-X (sc)
+- home_pit_FO-X (sc)
+- home_pit_SI-X (sc)
+- home_pit_SL-X (sc)
+- home_pit_CU-X (sc)
+- home_pit_KC-X (sc)
+- home_pit_EP-X (sc)
+- home_pit_CH-X (sc)
+- home_pit_SC-X (sc)
+- home_pit_KN-X (sc)
+- home_pit_FA-Z (sc)
+- home_pit_FT-Z (sc)
+- home_pit_FC-Z (sc)
+- home_pit_FS-Z (sc)
+- home_pit_FO-Z (sc)
+- home_pit_SI-Z (sc)
+- home_pit_SL-Z (sc)
+- home_pit_CU-Z (sc)
+- home_pit_KC-Z (sc)
+- home_pit_EP-Z (sc)
+- home_pit_CH-Z (sc)
+- home_pit_SC-Z (sc)
+- home_pit_KN-Z (sc)
+- home_pit_wFA (sc)
+- home_pit_wFT (sc)
+- home_pit_wFC (sc)
+- home_pit_wFS (sc)
+- home_pit_wFO (sc)
+- home_pit_wSI (sc)
+- home_pit_wSL (sc)
+- home_pit_wCU (sc)
+- home_pit_wKC (sc)
+- home_pit_wEP (sc)
+- home_pit_wCH (sc)
+- home_pit_wSC (sc)
+- home_pit_wKN (sc)
+- home_pit_wFA/C (sc)
+- home_pit_wFT/C (sc)
+- home_pit_wFC/C (sc)
+- home_pit_wFS/C (sc)
+- home_pit_wFO/C (sc)
+- home_pit_wSI/C (sc)
+- home_pit_wSL/C (sc)
+- home_pit_wCU/C (sc)
+- home_pit_wKC/C (sc)
+- home_pit_wEP/C (sc)
+- home_pit_wCH/C (sc)
+- home_pit_wSC/C (sc)
+- home_pit_wKN/C (sc)
+- home_pit_O-Swing% (sc)
+- home_pit_Z-Swing% (sc)
+- home_pit_Swing% (sc)
+- home_pit_O-Contact% (sc)
+- home_pit_Z-Contact% (sc)
+- home_pit_Contact% (sc)
+- home_pit_Zone% (sc)
+- home_pit_Pace
+- home_pit_RA9-WAR
+- home_pit_BIP-Wins
+- home_pit_LOB-Wins
+- home_pit_FDP-Wins
+- home_pit_Age Rng
+- home_pit_K-BB%
+- home_pit_Pull%
+- home_pit_Cent%
+- home_pit_Oppo%
+- home_pit_Soft%
+- home_pit_Med%
+- home_pit_Hard%
+- home_pit_kwERA
+- home_pit_TTO%
+- home_pit_CH% (pi)
+- home_pit_CS% (pi)
+- home_pit_CU% (pi)
+- home_pit_FA% (pi)
+- home_pit_FC% (pi)
+- home_pit_FS% (pi)
+- home_pit_KN% (pi)
+- home_pit_SB% (pi)
+- home_pit_SI% (pi)
+- home_pit_SL% (pi)
+- home_pit_XX% (pi)
+- home_pit_vCH (pi)
+- home_pit_vCS (pi)
+- home_pit_vCU (pi)
+- home_pit_vFA (pi)
+- home_pit_vFC (pi)
+- home_pit_vFS (pi)
+- home_pit_vKN (pi)
+- home_pit_vSB (pi)
+- home_pit_vSI (pi)
+- home_pit_vSL (pi)
+- home_pit_vXX (pi)
+- home_pit_CH-X (pi)
+- home_pit_CS-X (pi)
+- home_pit_CU-X (pi)
+- home_pit_FA-X (pi)
+- home_pit_FC-X (pi)
+- home_pit_FS-X (pi)
+- home_pit_KN-X (pi)
+- home_pit_SB-X (pi)
+- home_pit_SI-X (pi)
+- home_pit_SL-X (pi)
+- home_pit_XX-X (pi)
+- home_pit_CH-Z (pi)
+- home_pit_CS-Z (pi)
+- home_pit_CU-Z (pi)
+- home_pit_FA-Z (pi)
+- home_pit_FC-Z (pi)
+- home_pit_FS-Z (pi)
+- home_pit_KN-Z (pi)
+- home_pit_SB-Z (pi)
+- home_pit_SI-Z (pi)
+- home_pit_SL-Z (pi)
+- home_pit_XX-Z (pi)
+- home_pit_wCH (pi)
+- home_pit_wCS (pi)
+- home_pit_wCU (pi)
+- home_pit_wFA (pi)
+- home_pit_wFC (pi)
+- home_pit_wFS (pi)
+- home_pit_wKN (pi)
+- home_pit_wSB (pi)
+- home_pit_wSI (pi)
+- home_pit_wSL (pi)
+- home_pit_wXX (pi)
+- home_pit_wCH/C (pi)
+- home_pit_wCS/C (pi)
+- home_pit_wCU/C (pi)
+- home_pit_wFA/C (pi)
+- home_pit_wFC/C (pi)
+- home_pit_wFS/C (pi)
+- home_pit_wKN/C (pi)
+- home_pit_wSB/C (pi)
+- home_pit_wSI/C (pi)
+- home_pit_wSL/C (pi)
+- home_pit_wXX/C (pi)
+- home_pit_O-Swing% (pi)
+- home_pit_Z-Swing% (pi)
+- home_pit_Swing% (pi)
+- home_pit_O-Contact% (pi)
+- home_pit_Z-Contact% (pi)
+- home_pit_Contact% (pi)
+- home_pit_Zone% (pi)
+- home_pit_Pace (pi)
+- home_pit_FRM
+- home_pit_K/9+
+- home_pit_BB/9+
+- home_pit_K/BB+
+- home_pit_H/9+
+- home_pit_HR/9+
+- home_pit_AVG+
+- home_pit_WHIP+
+- home_pit_BABIP+
+- home_pit_LOB%+
+- home_pit_K%+
+- home_pit_BB%+
+- home_pit_LD%+
+- home_pit_GB%+
+- home_pit_FB%+
+- home_pit_HR/FB%+
+- home_pit_Pull%+
+- home_pit_Cent%+
+- home_pit_Oppo%+
+- home_pit_Soft%+
+- home_pit_Med%+
+- home_pit_Hard%+
+- home_pit_EV
+- home_pit_LA
+- home_pit_Barrels
+- home_pit_Barrel%
+- home_pit_maxEV
+- home_pit_HardHit
+- home_pit_HardHit%
+- home_pit_Events
+- home_pit_CStr%
+- home_pit_CSW%
+- home_pit_xERA
+- home_pit_botERA
+- home_pit_botOvr CH
+- home_pit_botStf CH
+- home_pit_botCmd CH
+- home_pit_botOvr CU
+- home_pit_botStf CU
+- home_pit_botCmd CU
+- home_pit_botOvr FA
+- home_pit_botStf FA
+- home_pit_botCmd FA
+- home_pit_botOvr SI
+- home_pit_botStf SI
+- home_pit_botCmd SI
+- home_pit_botOvr SL
+- home_pit_botStf SL
+- home_pit_botCmd SL
+- home_pit_botOvr KC
+- home_pit_botStf KC
+- home_pit_botCmd KC
+- home_pit_botOvr FC
+- home_pit_botStf FC
+- home_pit_botCmd FC
+- home_pit_botOvr FS
+- home_pit_botStf FS
+- home_pit_botCmd FS
+- home_pit_botOvr
+- home_pit_botStf
+- home_pit_botCmd
+- home_pit_botxRV100
+- home_pit_Stf+ CH
+- home_pit_Loc+ CH
+- home_pit_Pit+ CH
+- home_pit_Stf+ CU
+- home_pit_Loc+ CU
+- home_pit_Pit+ CU
+- home_pit_Stf+ FA
+- home_pit_Loc+ FA
+- home_pit_Pit+ FA
+- home_pit_Stf+ SI
+- home_pit_Loc+ SI
+- home_pit_Pit+ SI
+- home_pit_Stf+ SL
+- home_pit_Loc+ SL
+- home_pit_Pit+ SL
+- home_pit_Stf+ KC
+- home_pit_Loc+ KC
+- home_pit_Pit+ KC
+- home_pit_Stf+ FC
+- home_pit_Loc+ FC
+- home_pit_Pit+ FC
+- home_pit_Stf+ FS
+- home_pit_Loc+ FS
+- home_pit_Pit+ FS
+- home_pit_Stuff+
+- home_pit_Location+
+- home_pit_Pitching+
+- home_pit_Stf+ FO
+- home_pit_Loc+ FO
+- home_pit_Pit+ FO
+- away_pit_IDfg
+- away_pit_Season
+- away_pit_Age
+- away_pit_W
+- away_pit_L
+- away_pit_WAR
+- away_pit_ERA
+- away_pit_G
+- away_pit_GS
+- away_pit_CG
+- away_pit_ShO
+- away_pit_SV
+- away_pit_BS
+- away_pit_IP
+- away_pit_TBF
+- away_pit_H
+- away_pit_R
+- away_pit_ER
+- away_pit_HR
+- away_pit_BB
+- away_pit_IBB
+- away_pit_HBP
+- away_pit_WP
+- away_pit_BK
+- away_pit_SO
+- away_pit_GB
+- away_pit_FB
+- away_pit_LD
+- away_pit_IFFB
+- away_pit_Balls
+- away_pit_Strikes
+- away_pit_Pitches
+- away_pit_RS
+- away_pit_IFH
+- away_pit_BU
+- away_pit_BUH
+- away_pit_K/9
+- away_pit_BB/9
+- away_pit_K/BB
+- away_pit_H/9
+- away_pit_HR/9
+- away_pit_AVG
+- away_pit_WHIP
+- away_pit_BABIP
+- away_pit_LOB%
+- away_pit_FIP
+- away_pit_GB/FB
+- away_pit_LD%
+- away_pit_GB%
+- away_pit_FB%
+- away_pit_IFFB%
+- away_pit_HR/FB
+- away_pit_IFH%
+- away_pit_BUH%
+- away_pit_Starting
+- away_pit_Start-IP
+- away_pit_Relieving
+- away_pit_Relief-IP
+- away_pit_RAR
+- away_pit_Dollars
+- away_pit_tERA
+- away_pit_xFIP
+- away_pit_WPA
+- away_pit_-WPA
+- away_pit_+WPA
+- away_pit_RE24
+- away_pit_REW
+- away_pit_pLI
+- away_pit_inLI
+- away_pit_gmLI
+- away_pit_exLI
+- away_pit_Pulls
+- away_pit_WPA/LI
+- away_pit_Clutch
+- away_pit_FB% 2
+- away_pit_FBv
+- away_pit_SL%
+- away_pit_SLv
+- away_pit_CT%
+- away_pit_CTv
+- away_pit_CB%
+- away_pit_CBv
+- away_pit_CH%
+- away_pit_CHv
+- away_pit_SF%
+- away_pit_SFv
+- away_pit_KN%
+- away_pit_KNv
+- away_pit_XX%
+- away_pit_PO%
+- away_pit_wFB
+- away_pit_wSL
+- away_pit_wCT
+- away_pit_wCB
+- away_pit_wCH
+- away_pit_wSF
+- away_pit_wKN
+- away_pit_wFB/C
+- away_pit_wSL/C
+- away_pit_wCT/C
+- away_pit_wCB/C
+- away_pit_wCH/C
+- away_pit_wSF/C
+- away_pit_wKN/C
+- away_pit_O-Swing%
+- away_pit_Z-Swing%
+- away_pit_Swing%
+- away_pit_O-Contact%
+- away_pit_Z-Contact%
+- away_pit_Contact%
+- away_pit_Zone%
+- away_pit_F-Strike%
+- away_pit_SwStr%
+- away_pit_HLD
+- away_pit_SD
+- away_pit_MD
+- away_pit_ERA-
+- away_pit_FIP-
+- away_pit_xFIP-
+- away_pit_K%
+- away_pit_BB%
+- away_pit_SIERA
+- away_pit_RS/9
+- away_pit_E-F
+- away_pit_FA% (sc)
+- away_pit_FT% (sc)
+- away_pit_FC% (sc)
+- away_pit_FS% (sc)
+- away_pit_FO% (sc)
+- away_pit_SI% (sc)
+- away_pit_SL% (sc)
+- away_pit_CU% (sc)
+- away_pit_KC% (sc)
+- away_pit_EP% (sc)
+- away_pit_CH% (sc)
+- away_pit_SC% (sc)
+- away_pit_KN% (sc)
+- away_pit_UN% (sc)
+- away_pit_vFA (sc)
+- away_pit_vFT (sc)
+- away_pit_vFC (sc)
+- away_pit_vFS (sc)
+- away_pit_vFO (sc)
+- away_pit_vSI (sc)
+- away_pit_vSL (sc)
+- away_pit_vCU (sc)
+- away_pit_vKC (sc)
+- away_pit_vEP (sc)
+- away_pit_vCH (sc)
+- away_pit_vSC (sc)
+- away_pit_vKN (sc)
+- away_pit_FA-X (sc)
+- away_pit_FT-X (sc)
+- away_pit_FC-X (sc)
+- away_pit_FS-X (sc)
+- away_pit_FO-X (sc)
+- away_pit_SI-X (sc)
+- away_pit_SL-X (sc)
+- away_pit_CU-X (sc)
+- away_pit_KC-X (sc)
+- away_pit_EP-X (sc)
+- away_pit_CH-X (sc)
+- away_pit_SC-X (sc)
+- away_pit_KN-X (sc)
+- away_pit_FA-Z (sc)
+- away_pit_FT-Z (sc)
+- away_pit_FC-Z (sc)
+- away_pit_FS-Z (sc)
+- away_pit_FO-Z (sc)
+- away_pit_SI-Z (sc)
+- away_pit_SL-Z (sc)
+- away_pit_CU-Z (sc)
+- away_pit_KC-Z (sc)
+- away_pit_EP-Z (sc)
+- away_pit_CH-Z (sc)
+- away_pit_SC-Z (sc)
+- away_pit_KN-Z (sc)
+- away_pit_wFA (sc)
+- away_pit_wFT (sc)
+- away_pit_wFC (sc)
+- away_pit_wFS (sc)
+- away_pit_wFO (sc)
+- away_pit_wSI (sc)
+- away_pit_wSL (sc)
+- away_pit_wCU (sc)
+- away_pit_wKC (sc)
+- away_pit_wEP (sc)
+- away_pit_wCH (sc)
+- away_pit_wSC (sc)
+- away_pit_wKN (sc)
+- away_pit_wFA/C (sc)
+- away_pit_wFT/C (sc)
+- away_pit_wFC/C (sc)
+- away_pit_wFS/C (sc)
+- away_pit_wFO/C (sc)
+- away_pit_wSI/C (sc)
+- away_pit_wSL/C (sc)
+- away_pit_wCU/C (sc)
+- away_pit_wKC/C (sc)
+- away_pit_wEP/C (sc)
+- away_pit_wCH/C (sc)
+- away_pit_wSC/C (sc)
+- away_pit_wKN/C (sc)
+- away_pit_O-Swing% (sc)
+- away_pit_Z-Swing% (sc)
+- away_pit_Swing% (sc)
+- away_pit_O-Contact% (sc)
+- away_pit_Z-Contact% (sc)
+- away_pit_Contact% (sc)
+- away_pit_Zone% (sc)
+- away_pit_Pace
+- away_pit_RA9-WAR
+- away_pit_BIP-Wins
+- away_pit_LOB-Wins
+- away_pit_FDP-Wins
+- away_pit_Age Rng
+- away_pit_K-BB%
+- away_pit_Pull%
+- away_pit_Cent%
+- away_pit_Oppo%
+- away_pit_Soft%
+- away_pit_Med%
+- away_pit_Hard%
+- away_pit_kwERA
+- away_pit_TTO%
+- away_pit_CH% (pi)
+- away_pit_CS% (pi)
+- away_pit_CU% (pi)
+- away_pit_FA% (pi)
+- away_pit_FC% (pi)
+- away_pit_FS% (pi)
+- away_pit_KN% (pi)
+- away_pit_SB% (pi)
+- away_pit_SI% (pi)
+- away_pit_SL% (pi)
+- away_pit_XX% (pi)
+- away_pit_vCH (pi)
+- away_pit_vCS (pi)
+- away_pit_vCU (pi)
+- away_pit_vFA (pi)
+- away_pit_vFC (pi)
+- away_pit_vFS (pi)
+- away_pit_vKN (pi)
+- away_pit_vSB (pi)
+- away_pit_vSI (pi)
+- away_pit_vSL (pi)
+- away_pit_vXX (pi)
+- away_pit_CH-X (pi)
+- away_pit_CS-X (pi)
+- away_pit_CU-X (pi)
+- away_pit_FA-X (pi)
+- away_pit_FC-X (pi)
+- away_pit_FS-X (pi)
+- away_pit_KN-X (pi)
+- away_pit_SB-X (pi)
+- away_pit_SI-X (pi)
+- away_pit_SL-X (pi)
+- away_pit_XX-X (pi)
+- away_pit_CH-Z (pi)
+- away_pit_CS-Z (pi)
+- away_pit_CU-Z (pi)
+- away_pit_FA-Z (pi)
+- away_pit_FC-Z (pi)
+- away_pit_FS-Z (pi)
+- away_pit_KN-Z (pi)
+- away_pit_SB-Z (pi)
+- away_pit_SI-Z (pi)
+- away_pit_SL-Z (pi)
+- away_pit_XX-Z (pi)
+- away_pit_wCH (pi)
+- away_pit_wCS (pi)
+- away_pit_wCU (pi)
+- away_pit_wFA (pi)
+- away_pit_wFC (pi)
+- away_pit_wFS (pi)
+- away_pit_wKN (pi)
+- away_pit_wSB (pi)
+- away_pit_wSI (pi)
+- away_pit_wSL (pi)
+- away_pit_wXX (pi)
+- away_pit_wCH/C (pi)
+- away_pit_wCS/C (pi)
+- away_pit_wCU/C (pi)
+- away_pit_wFA/C (pi)
+- away_pit_wFC/C (pi)
+- away_pit_wFS/C (pi)
+- away_pit_wKN/C (pi)
+- away_pit_wSB/C (pi)
+- away_pit_wSI/C (pi)
+- away_pit_wSL/C (pi)
+- away_pit_wXX/C (pi)
+- away_pit_O-Swing% (pi)
+- away_pit_Z-Swing% (pi)
+- away_pit_Swing% (pi)
+- away_pit_O-Contact% (pi)
+- away_pit_Z-Contact% (pi)
+- away_pit_Contact% (pi)
+- away_pit_Zone% (pi)
+- away_pit_Pace (pi)
+- away_pit_FRM
+- away_pit_K/9+
+- away_pit_BB/9+
+- away_pit_K/BB+
+- away_pit_H/9+
+- away_pit_HR/9+
+- away_pit_AVG+
+- away_pit_WHIP+
+- away_pit_BABIP+
+- away_pit_LOB%+
+- away_pit_K%+
+- away_pit_BB%+
+- away_pit_LD%+
+- away_pit_GB%+
+- away_pit_FB%+
+- away_pit_HR/FB%+
+- away_pit_Pull%+
+- away_pit_Cent%+
+- away_pit_Oppo%+
+- away_pit_Soft%+
+- away_pit_Med%+
+- away_pit_Hard%+
+- away_pit_EV
+- away_pit_LA
+- away_pit_Barrels
+- away_pit_Barrel%
+- away_pit_maxEV
+- away_pit_HardHit
+- away_pit_HardHit%
+- away_pit_Events
+- away_pit_CStr%
+- away_pit_CSW%
+- away_pit_xERA
+- away_pit_botERA
+- away_pit_botOvr CH
+- away_pit_botStf CH
+- away_pit_botCmd CH
+- away_pit_botOvr CU
+- away_pit_botStf CU
+- away_pit_botCmd CU
+- away_pit_botOvr FA
+- away_pit_botStf FA
+- away_pit_botCmd FA
+- away_pit_botOvr SI
+- away_pit_botStf SI
+- away_pit_botCmd SI
+- away_pit_botOvr SL
+- away_pit_botStf SL
+- away_pit_botCmd SL
+- away_pit_botOvr KC
+- away_pit_botStf KC
+- away_pit_botCmd KC
+- away_pit_botOvr FC
+- away_pit_botStf FC
+- away_pit_botCmd FC
+- away_pit_botOvr FS
+- away_pit_botStf FS
+- away_pit_botCmd FS
+- away_pit_botOvr
+- away_pit_botStf
+- away_pit_botCmd
+- away_pit_botxRV100
+- away_pit_Stf+ CH
+- away_pit_Loc+ CH
+- away_pit_Pit+ CH
+- away_pit_Stf+ CU
+- away_pit_Loc+ CU
+- away_pit_Pit+ CU
+- away_pit_Stf+ FA
+- away_pit_Loc+ FA
+- away_pit_Pit+ FA
+- away_pit_Stf+ SI
+- away_pit_Loc+ SI
+- away_pit_Pit+ SI
+- away_pit_Stf+ SL
+- away_pit_Loc+ SL
+- away_pit_Pit+ SL
+- away_pit_Stf+ KC
+- away_pit_Loc+ KC
+- away_pit_Pit+ KC
+- away_pit_Stf+ FC
+- away_pit_Loc+ FC
+- away_pit_Pit+ FC
+- away_pit_Stf+ FS
+- away_pit_Loc+ FS
+- away_pit_Pit+ FS
+- away_pit_Stuff+
+- away_pit_Location+
+- away_pit_Pitching+
+- away_pit_Stf+ FO
+- away_pit_Loc+ FO
+- away_pit_Pit+ FO
+- home_starter_era
+- home_starter_fip
+- home_starter_xfip
+- home_starter_siera
+- home_starter_whip
+- home_starter_k_pct
+- home_starter_bb_pct
+- home_starter_kbb_pct
+- home_starter_war
+- home_starter_ip
+- away_starter_era
+- away_starter_fip
+- away_starter_xfip
+- away_starter_siera
+- away_starter_whip
+- away_starter_k_pct
+- away_starter_bb_pct
+- away_starter_kbb_pct
+- away_starter_war
+- away_starter_ip
+- diff_team
+- diff_pitcher_mlbam
+- diff_pitcher_retro
+- diff_pitcher_name
+- diff_score
+- diff_roll5_runs_scored_mean
+- diff_roll5_runs_scored_sum
+- diff_roll5_runs_allowed_mean
+- diff_roll5_runs_allowed_sum
+- diff_roll5_run_diff_mean
+- diff_roll5_run_diff_sum
+- diff_roll5_win_mean
+- diff_roll5_win_sum
+- diff_roll15_runs_scored_mean
+- diff_roll15_runs_scored_sum
+- diff_roll15_runs_allowed_mean
+- diff_roll15_runs_allowed_sum
+- diff_roll15_run_diff_mean
+- diff_roll15_run_diff_sum
+- diff_roll15_win_mean
+- diff_roll15_win_sum
+- diff_roll30_runs_scored_mean
+- diff_roll30_runs_scored_sum
+- diff_roll30_runs_allowed_mean
+- diff_roll30_runs_allowed_sum
+- diff_roll30_run_diff_mean
+- diff_roll30_run_diff_sum
+- diff_roll30_win_mean
+- diff_roll30_win_sum
+- diff_ha_roll5_runs_scored_mean
+- diff_ha_roll5_runs_allowed_mean
+- diff_ha_roll5_win_mean
+- diff_ha_roll15_runs_scored_mean
+- diff_ha_roll15_runs_allowed_mean
+- diff_ha_roll15_win_mean
+- diff_ha_roll30_runs_scored_mean
+- diff_ha_roll30_runs_allowed_mean
+- diff_ha_roll30_win_mean
+- diff_rest_days
+- diff_bullpen_prev_runs_allowed
+- diff_bullpen_ra_last3
+- diff_bat_IDfg
+- diff_bat_Season
+- diff_bat_Age
+- diff_bat_G
+- diff_bat_AB
+- diff_bat_PA
+- diff_bat_H
+- diff_bat_1B
+- diff_bat_2B
+- diff_bat_3B
+- diff_bat_HR
+- diff_bat_R
+- diff_bat_RBI
+- diff_bat_BB
+- diff_bat_IBB
+- diff_bat_SO
+- diff_bat_HBP
+- diff_bat_SF
+- diff_bat_SH
+- diff_bat_GDP
+- diff_bat_SB
+- diff_bat_CS
+- diff_bat_AVG
+- diff_bat_GB
+- diff_bat_FB
+- diff_bat_LD
+- diff_bat_IFFB
+- diff_bat_Pitches
+- diff_bat_Balls
+- diff_bat_Strikes
+- diff_bat_IFH
+- diff_bat_BU
+- diff_bat_BUH
+- diff_bat_BB%
+- diff_bat_K%
+- diff_bat_BB/K
+- diff_bat_OBP
+- diff_bat_SLG
+- diff_bat_OPS
+- diff_bat_ISO
+- diff_bat_BABIP
+- diff_bat_GB/FB
+- diff_bat_LD%
+- diff_bat_GB%
+- diff_bat_FB%
+- diff_bat_IFFB%
+- diff_bat_HR/FB
+- diff_bat_IFH%
+- diff_bat_BUH%
+- diff_bat_wOBA
+- diff_bat_wRAA
+- diff_bat_wRC
+- diff_bat_Bat
+- diff_bat_Fld
+- diff_bat_Rep
+- diff_bat_Pos
+- diff_bat_RAR
+- diff_bat_WAR
+- diff_bat_Dol
+- diff_bat_Spd
+- diff_bat_wRC+
+- diff_bat_WPA
+- diff_bat_-WPA
+- diff_bat_+WPA
+- diff_bat_RE24
+- diff_bat_REW
+- diff_bat_pLI
+- diff_bat_phLI
+- diff_bat_PH
+- diff_bat_WPA/LI
+- diff_bat_Clutch
+- diff_bat_FB% (Pitch)
+- diff_bat_FBv
+- diff_bat_SL%
+- diff_bat_SLv
+- diff_bat_CT%
+- diff_bat_CTv
+- diff_bat_CB%
+- diff_bat_CBv
+- diff_bat_CH%
+- diff_bat_CHv
+- diff_bat_SF%
+- diff_bat_SFv
+- diff_bat_KN%
+- diff_bat_KNv
+- diff_bat_XX%
+- diff_bat_PO%
+- diff_bat_wFB
+- diff_bat_wSL
+- diff_bat_wCT
+- diff_bat_wCB
+- diff_bat_wCH
+- diff_bat_wSF
+- diff_bat_wKN
+- diff_bat_wFB/C
+- diff_bat_wSL/C
+- diff_bat_wCT/C
+- diff_bat_wCB/C
+- diff_bat_wCH/C
+- diff_bat_wSF/C
+- diff_bat_wKN/C
+- diff_bat_O-Swing%
+- diff_bat_Z-Swing%
+- diff_bat_Swing%
+- diff_bat_O-Contact%
+- diff_bat_Z-Contact%
+- diff_bat_Contact%
+- diff_bat_Zone%
+- diff_bat_F-Strike%
+- diff_bat_SwStr%
+- diff_bat_BsR
+- diff_bat_FA% (sc)
+- diff_bat_FT% (sc)
+- diff_bat_FC% (sc)
+- diff_bat_FS% (sc)
+- diff_bat_FO% (sc)
+- diff_bat_SI% (sc)
+- diff_bat_SL% (sc)
+- diff_bat_CU% (sc)
+- diff_bat_KC% (sc)
+- diff_bat_EP% (sc)
+- diff_bat_CH% (sc)
+- diff_bat_SC% (sc)
+- diff_bat_KN% (sc)
+- diff_bat_UN% (sc)
+- diff_bat_vFA (sc)
+- diff_bat_vFT (sc)
+- diff_bat_vFC (sc)
+- diff_bat_vFS (sc)
+- diff_bat_vFO (sc)
+- diff_bat_vSI (sc)
+- diff_bat_vSL (sc)
+- diff_bat_vCU (sc)
+- diff_bat_vKC (sc)
+- diff_bat_vEP (sc)
+- diff_bat_vCH (sc)
+- diff_bat_vSC (sc)
+- diff_bat_vKN (sc)
+- diff_bat_FA-X (sc)
+- diff_bat_FT-X (sc)
+- diff_bat_FC-X (sc)
+- diff_bat_FS-X (sc)
+- diff_bat_FO-X (sc)
+- diff_bat_SI-X (sc)
+- diff_bat_SL-X (sc)
+- diff_bat_CU-X (sc)
+- diff_bat_KC-X (sc)
+- diff_bat_EP-X (sc)
+- diff_bat_CH-X (sc)
+- diff_bat_SC-X (sc)
+- diff_bat_KN-X (sc)
+- diff_bat_FA-Z (sc)
+- diff_bat_FT-Z (sc)
+- diff_bat_FC-Z (sc)
+- diff_bat_FS-Z (sc)
+- diff_bat_FO-Z (sc)
+- diff_bat_SI-Z (sc)
+- diff_bat_SL-Z (sc)
+- diff_bat_CU-Z (sc)
+- diff_bat_KC-Z (sc)
+- diff_bat_EP-Z (sc)
+- diff_bat_CH-Z (sc)
+- diff_bat_SC-Z (sc)
+- diff_bat_KN-Z (sc)
+- diff_bat_wFA (sc)
+- diff_bat_wFT (sc)
+- diff_bat_wFC (sc)
+- diff_bat_wFS (sc)
+- diff_bat_wFO (sc)
+- diff_bat_wSI (sc)
+- diff_bat_wSL (sc)
+- diff_bat_wCU (sc)
+- diff_bat_wKC (sc)
+- diff_bat_wEP (sc)
+- diff_bat_wCH (sc)
+- diff_bat_wSC (sc)
+- diff_bat_wKN (sc)
+- diff_bat_wFA/C (sc)
+- diff_bat_wFT/C (sc)
+- diff_bat_wFC/C (sc)
+- diff_bat_wFS/C (sc)
+- diff_bat_wFO/C (sc)
+- diff_bat_wSI/C (sc)
+- diff_bat_wSL/C (sc)
+- diff_bat_wCU/C (sc)
+- diff_bat_wKC/C (sc)
+- diff_bat_wEP/C (sc)
+- diff_bat_wCH/C (sc)
+- diff_bat_wSC/C (sc)
+- diff_bat_wKN/C (sc)
+- diff_bat_O-Swing% (sc)
+- diff_bat_Z-Swing% (sc)
+- diff_bat_Swing% (sc)
+- diff_bat_O-Contact% (sc)
+- diff_bat_Z-Contact% (sc)
+- diff_bat_Contact% (sc)
+- diff_bat_Zone% (sc)
+- diff_bat_Pace
+- diff_bat_Def
+- diff_bat_wSB
+- diff_bat_UBR
+- diff_bat_Age Rng
+- diff_bat_Off
+- diff_bat_Lg
+- diff_bat_wGDP
+- diff_bat_Pull%
+- diff_bat_Cent%
+- diff_bat_Oppo%
+- diff_bat_Soft%
+- diff_bat_Med%
+- diff_bat_Hard%
+- diff_bat_TTO%
+- diff_bat_CH% (pi)
+- diff_bat_CS% (pi)
+- diff_bat_CU% (pi)
+- diff_bat_FA% (pi)
+- diff_bat_FC% (pi)
+- diff_bat_FS% (pi)
+- diff_bat_KN% (pi)
+- diff_bat_SB% (pi)
+- diff_bat_SI% (pi)
+- diff_bat_SL% (pi)
+- diff_bat_XX% (pi)
+- diff_bat_vCH (pi)
+- diff_bat_vCS (pi)
+- diff_bat_vCU (pi)
+- diff_bat_vFA (pi)
+- diff_bat_vFC (pi)
+- diff_bat_vFS (pi)
+- diff_bat_vKN (pi)
+- diff_bat_vSB (pi)
+- diff_bat_vSI (pi)
+- diff_bat_vSL (pi)
+- diff_bat_vXX (pi)
+- diff_bat_CH-X (pi)
+- diff_bat_CS-X (pi)
+- diff_bat_CU-X (pi)
+- diff_bat_FA-X (pi)
+- diff_bat_FC-X (pi)
+- diff_bat_FS-X (pi)
+- diff_bat_KN-X (pi)
+- diff_bat_SB-X (pi)
+- diff_bat_SI-X (pi)
+- diff_bat_SL-X (pi)
+- diff_bat_XX-X (pi)
+- diff_bat_CH-Z (pi)
+- diff_bat_CS-Z (pi)
+- diff_bat_CU-Z (pi)
+- diff_bat_FA-Z (pi)
+- diff_bat_FC-Z (pi)
+- diff_bat_FS-Z (pi)
+- diff_bat_KN-Z (pi)
+- diff_bat_SB-Z (pi)
+- diff_bat_SI-Z (pi)
+- diff_bat_SL-Z (pi)
+- diff_bat_XX-Z (pi)
+- diff_bat_wCH (pi)
+- diff_bat_wCS (pi)
+- diff_bat_wCU (pi)
+- diff_bat_wFA (pi)
+- diff_bat_wFC (pi)
+- diff_bat_wFS (pi)
+- diff_bat_wKN (pi)
+- diff_bat_wSB (pi)
+- diff_bat_wSI (pi)
+- diff_bat_wSL (pi)
+- diff_bat_wXX (pi)
+- diff_bat_wCH/C (pi)
+- diff_bat_wCS/C (pi)
+- diff_bat_wCU/C (pi)
+- diff_bat_wFA/C (pi)
+- diff_bat_wFC/C (pi)
+- diff_bat_wFS/C (pi)
+- diff_bat_wKN/C (pi)
+- diff_bat_wSB/C (pi)
+- diff_bat_wSI/C (pi)
+- diff_bat_wSL/C (pi)
+- diff_bat_wXX/C (pi)
+- diff_bat_O-Swing% (pi)
+- diff_bat_Z-Swing% (pi)
+- diff_bat_Swing% (pi)
+- diff_bat_O-Contact% (pi)
+- diff_bat_Z-Contact% (pi)
+- diff_bat_Contact% (pi)
+- diff_bat_Zone% (pi)
+- diff_bat_Pace (pi)
+- diff_bat_FRM
+- diff_bat_AVG+
+- diff_bat_BB%+
+- diff_bat_K%+
+- diff_bat_OBP+
+- diff_bat_SLG+
+- diff_bat_ISO+
+- diff_bat_BABIP+
+- diff_bat_LD+%
+- diff_bat_GB%+
+- diff_bat_FB%+
+- diff_bat_HR/FB%+
+- diff_bat_Pull%+
+- diff_bat_Cent%+
+- diff_bat_Oppo%+
+- diff_bat_Soft%+
+- diff_bat_Med%+
+- diff_bat_Hard%+
+- diff_bat_EV
+- diff_bat_LA
+- diff_bat_Barrels
+- diff_bat_Barrel%
+- diff_bat_maxEV
+- diff_bat_HardHit
+- diff_bat_HardHit%
+- diff_bat_Events
+- diff_bat_CStr%
+- diff_bat_CSW%
+- diff_bat_xBA
+- diff_bat_xSLG
+- diff_bat_xwOBA
+- diff_bat_L-WAR
+- diff_pit_IDfg
+- diff_pit_Season
+- diff_pit_Age
+- diff_pit_W
+- diff_pit_L
+- diff_pit_WAR
+- diff_pit_ERA
+- diff_pit_G
+- diff_pit_GS
+- diff_pit_CG
+- diff_pit_ShO
+- diff_pit_SV
+- diff_pit_BS
+- diff_pit_IP
+- diff_pit_TBF
+- diff_pit_H
+- diff_pit_R
+- diff_pit_ER
+- diff_pit_HR
+- diff_pit_BB
+- diff_pit_IBB
+- diff_pit_HBP
+- diff_pit_WP
+- diff_pit_BK
+- diff_pit_SO
+- diff_pit_GB
+- diff_pit_FB
+- diff_pit_LD
+- diff_pit_IFFB
+- diff_pit_Balls
+- diff_pit_Strikes
+- diff_pit_Pitches
+- diff_pit_RS
+- diff_pit_IFH
+- diff_pit_BU
+- diff_pit_BUH
+- diff_pit_K/9
+- diff_pit_BB/9
+- diff_pit_K/BB
+- diff_pit_H/9
+- diff_pit_HR/9
+- diff_pit_AVG
+- diff_pit_WHIP
+- diff_pit_BABIP
+- diff_pit_LOB%
+- diff_pit_FIP
+- diff_pit_GB/FB
+- diff_pit_LD%
+- diff_pit_GB%
+- diff_pit_FB%
+- diff_pit_IFFB%
+- diff_pit_HR/FB
+- diff_pit_IFH%
+- diff_pit_BUH%
+- diff_pit_Starting
+- diff_pit_Start-IP
+- diff_pit_Relieving
+- diff_pit_Relief-IP
+- diff_pit_RAR
+- diff_pit_Dollars
+- diff_pit_tERA
+- diff_pit_xFIP
+- diff_pit_WPA
+- diff_pit_-WPA
+- diff_pit_+WPA
+- diff_pit_RE24
+- diff_pit_REW
+- diff_pit_pLI
+- diff_pit_inLI
+- diff_pit_gmLI
+- diff_pit_exLI
+- diff_pit_Pulls
+- diff_pit_WPA/LI
+- diff_pit_Clutch
+- diff_pit_FB% 2
+- diff_pit_FBv
+- diff_pit_SL%
+- diff_pit_SLv
+- diff_pit_CT%
+- diff_pit_CTv
+- diff_pit_CB%
+- diff_pit_CBv
+- diff_pit_CH%
+- diff_pit_CHv
+- diff_pit_SF%
+- diff_pit_SFv
+- diff_pit_KN%
+- diff_pit_KNv
+- diff_pit_XX%
+- diff_pit_PO%
+- diff_pit_wFB
+- diff_pit_wSL
+- diff_pit_wCT
+- diff_pit_wCB
+- diff_pit_wCH
+- diff_pit_wSF
+- diff_pit_wKN
+- diff_pit_wFB/C
+- diff_pit_wSL/C
+- diff_pit_wCT/C
+- diff_pit_wCB/C
+- diff_pit_wCH/C
+- diff_pit_wSF/C
+- diff_pit_wKN/C
+- diff_pit_O-Swing%
+- diff_pit_Z-Swing%
+- diff_pit_Swing%
+- diff_pit_O-Contact%
+- diff_pit_Z-Contact%
+- diff_pit_Contact%
+- diff_pit_Zone%
+- diff_pit_F-Strike%
+- diff_pit_SwStr%
+- diff_pit_HLD
+- diff_pit_SD
+- diff_pit_MD
+- diff_pit_ERA-
+- diff_pit_FIP-
+- diff_pit_xFIP-
+- diff_pit_K%
+- diff_pit_BB%
+- diff_pit_SIERA
+- diff_pit_RS/9
+- diff_pit_E-F
+- diff_pit_FA% (sc)
+- diff_pit_FT% (sc)
+- diff_pit_FC% (sc)
+- diff_pit_FS% (sc)
+- diff_pit_FO% (sc)
+- diff_pit_SI% (sc)
+- diff_pit_SL% (sc)
+- diff_pit_CU% (sc)
+- diff_pit_KC% (sc)
+- diff_pit_EP% (sc)
+- diff_pit_CH% (sc)
+- diff_pit_SC% (sc)
+- diff_pit_KN% (sc)
+- diff_pit_UN% (sc)
+- diff_pit_vFA (sc)
+- diff_pit_vFT (sc)
+- diff_pit_vFC (sc)
+- diff_pit_vFS (sc)
+- diff_pit_vFO (sc)
+- diff_pit_vSI (sc)
+- diff_pit_vSL (sc)
+- diff_pit_vCU (sc)
+- diff_pit_vKC (sc)
+- diff_pit_vEP (sc)
+- diff_pit_vCH (sc)
+- diff_pit_vSC (sc)
+- diff_pit_vKN (sc)
+- diff_pit_FA-X (sc)
+- diff_pit_FT-X (sc)
+- diff_pit_FC-X (sc)
+- diff_pit_FS-X (sc)
+- diff_pit_FO-X (sc)
+- diff_pit_SI-X (sc)
+- diff_pit_SL-X (sc)
+- diff_pit_CU-X (sc)
+- diff_pit_KC-X (sc)
+- diff_pit_EP-X (sc)
+- diff_pit_CH-X (sc)
+- diff_pit_SC-X (sc)
+- diff_pit_KN-X (sc)
+- diff_pit_FA-Z (sc)
+- diff_pit_FT-Z (sc)
+- diff_pit_FC-Z (sc)
+- diff_pit_FS-Z (sc)
+- diff_pit_FO-Z (sc)
+- diff_pit_SI-Z (sc)
+- diff_pit_SL-Z (sc)
+- diff_pit_CU-Z (sc)
+- diff_pit_KC-Z (sc)
+- diff_pit_EP-Z (sc)
+- diff_pit_CH-Z (sc)
+- diff_pit_SC-Z (sc)
+- diff_pit_KN-Z (sc)
+- diff_pit_wFA (sc)
+- diff_pit_wFT (sc)
+- diff_pit_wFC (sc)
+- diff_pit_wFS (sc)
+- diff_pit_wFO (sc)
+- diff_pit_wSI (sc)
+- diff_pit_wSL (sc)
+- diff_pit_wCU (sc)
+- diff_pit_wKC (sc)
+- diff_pit_wEP (sc)
+- diff_pit_wCH (sc)
+- diff_pit_wSC (sc)
+- diff_pit_wKN (sc)
+- diff_pit_wFA/C (sc)
+- diff_pit_wFT/C (sc)
+- diff_pit_wFC/C (sc)
+- diff_pit_wFS/C (sc)
+- diff_pit_wFO/C (sc)
+- diff_pit_wSI/C (sc)
+- diff_pit_wSL/C (sc)
+- diff_pit_wCU/C (sc)
+- diff_pit_wKC/C (sc)
+- diff_pit_wEP/C (sc)
+- diff_pit_wCH/C (sc)
+- diff_pit_wSC/C (sc)
+- diff_pit_wKN/C (sc)
+- diff_pit_O-Swing% (sc)
+- diff_pit_Z-Swing% (sc)
+- diff_pit_Swing% (sc)
+- diff_pit_O-Contact% (sc)
+- diff_pit_Z-Contact% (sc)
+- diff_pit_Contact% (sc)
+- diff_pit_Zone% (sc)
+- diff_pit_Pace
+- diff_pit_RA9-WAR
+- diff_pit_BIP-Wins
+- diff_pit_LOB-Wins
+- diff_pit_FDP-Wins
+- diff_pit_Age Rng
+- diff_pit_K-BB%
+- diff_pit_Pull%
+- diff_pit_Cent%
+- diff_pit_Oppo%
+- diff_pit_Soft%
+- diff_pit_Med%
+- diff_pit_Hard%
+- diff_pit_kwERA
+- diff_pit_TTO%
+- diff_pit_CH% (pi)
+- diff_pit_CS% (pi)
+- diff_pit_CU% (pi)
+- diff_pit_FA% (pi)
+- diff_pit_FC% (pi)
+- diff_pit_FS% (pi)
+- diff_pit_KN% (pi)
+- diff_pit_SB% (pi)
+- diff_pit_SI% (pi)
+- diff_pit_SL% (pi)
+- diff_pit_XX% (pi)
+- diff_pit_vCH (pi)
+- diff_pit_vCS (pi)
+- diff_pit_vCU (pi)
+- diff_pit_vFA (pi)
+- diff_pit_vFC (pi)
+- diff_pit_vFS (pi)
+- diff_pit_vKN (pi)
+- diff_pit_vSB (pi)
+- diff_pit_vSI (pi)
+- diff_pit_vSL (pi)
+- diff_pit_vXX (pi)
+- diff_pit_CH-X (pi)
+- diff_pit_CS-X (pi)
+- diff_pit_CU-X (pi)
+- diff_pit_FA-X (pi)
+- diff_pit_FC-X (pi)
+- diff_pit_FS-X (pi)
+- diff_pit_KN-X (pi)
+- diff_pit_SB-X (pi)
+- diff_pit_SI-X (pi)
+- diff_pit_SL-X (pi)
+- diff_pit_XX-X (pi)
+- diff_pit_CH-Z (pi)
+- diff_pit_CS-Z (pi)
+- diff_pit_CU-Z (pi)
+- diff_pit_FA-Z (pi)
+- diff_pit_FC-Z (pi)
+- diff_pit_FS-Z (pi)
+- diff_pit_KN-Z (pi)
+- diff_pit_SB-Z (pi)
+- diff_pit_SI-Z (pi)
+- diff_pit_SL-Z (pi)
+- diff_pit_XX-Z (pi)
+- diff_pit_wCH (pi)
+- diff_pit_wCS (pi)
+- diff_pit_wCU (pi)
+- diff_pit_wFA (pi)
+- diff_pit_wFC (pi)
+- diff_pit_wFS (pi)
+- diff_pit_wKN (pi)
+- diff_pit_wSB (pi)
+- diff_pit_wSI (pi)
+- diff_pit_wSL (pi)
+- diff_pit_wXX (pi)
+- diff_pit_wCH/C (pi)
+- diff_pit_wCS/C (pi)
+- diff_pit_wCU/C (pi)
+- diff_pit_wFA/C (pi)
+- diff_pit_wFC/C (pi)
+- diff_pit_wFS/C (pi)
+- diff_pit_wKN/C (pi)
+- diff_pit_wSB/C (pi)
+- diff_pit_wSI/C (pi)
+- diff_pit_wSL/C (pi)
+- diff_pit_wXX/C (pi)
+- diff_pit_O-Swing% (pi)
+- diff_pit_Z-Swing% (pi)
+- diff_pit_Swing% (pi)
+- diff_pit_O-Contact% (pi)
+- diff_pit_Z-Contact% (pi)
+- diff_pit_Contact% (pi)
+- diff_pit_Zone% (pi)
+- diff_pit_Pace (pi)
+- diff_pit_FRM
+- diff_pit_K/9+
+- diff_pit_BB/9+
+- diff_pit_K/BB+
+- diff_pit_H/9+
+- diff_pit_HR/9+
+- diff_pit_AVG+
+- diff_pit_WHIP+
+- diff_pit_BABIP+
+- diff_pit_LOB%+
+- diff_pit_K%+
+- diff_pit_BB%+
+- diff_pit_LD%+
+- diff_pit_GB%+
+- diff_pit_FB%+
+- diff_pit_HR/FB%+
+- diff_pit_Pull%+
+- diff_pit_Cent%+
+- diff_pit_Oppo%+
+- diff_pit_Soft%+
+- diff_pit_Med%+
+- diff_pit_Hard%+
+- diff_pit_EV
+- diff_pit_LA
+- diff_pit_Barrels
+- diff_pit_Barrel%
+- diff_pit_maxEV
+- diff_pit_HardHit
+- diff_pit_HardHit%
+- diff_pit_Events
+- diff_pit_CStr%
+- diff_pit_CSW%
+- diff_pit_xERA
+- diff_pit_botERA
+- diff_pit_botOvr CH
+- diff_pit_botStf CH
+- diff_pit_botCmd CH
+- diff_pit_botOvr CU
+- diff_pit_botStf CU
+- diff_pit_botCmd CU
+- diff_pit_botOvr FA
+- diff_pit_botStf FA
+- diff_pit_botCmd FA
+- diff_pit_botOvr SI
+- diff_pit_botStf SI
+- diff_pit_botCmd SI
+- diff_pit_botOvr SL
+- diff_pit_botStf SL
+- diff_pit_botCmd SL
+- diff_pit_botOvr KC
+- diff_pit_botStf KC
+- diff_pit_botCmd KC
+- diff_pit_botOvr FC
+- diff_pit_botStf FC
+- diff_pit_botCmd FC
+- diff_pit_botOvr FS
+- diff_pit_botStf FS
+- diff_pit_botCmd FS
+- diff_pit_botOvr
+- diff_pit_botStf
+- diff_pit_botCmd
+- diff_pit_botxRV100
+- diff_pit_Stf+ CH
+- diff_pit_Loc+ CH
+- diff_pit_Pit+ CH
+- diff_pit_Stf+ CU
+- diff_pit_Loc+ CU
+- diff_pit_Pit+ CU
+- diff_pit_Stf+ FA
+- diff_pit_Loc+ FA
+- diff_pit_Pit+ FA
+- diff_pit_Stf+ SI
+- diff_pit_Loc+ SI
+- diff_pit_Pit+ SI
+- diff_pit_Stf+ SL
+- diff_pit_Loc+ SL
+- diff_pit_Pit+ SL
+- diff_pit_Stf+ KC
+- diff_pit_Loc+ KC
+- diff_pit_Pit+ KC
+- diff_pit_Stf+ FC
+- diff_pit_Loc+ FC
+- diff_pit_Pit+ FC
+- diff_pit_Stf+ FS
+- diff_pit_Loc+ FS
+- diff_pit_Pit+ FS
+- diff_pit_Stuff+
+- diff_pit_Location+
+- diff_pit_Pitching+
+- diff_pit_Stf+ FO
+- diff_pit_Loc+ FO
+- diff_pit_Pit+ FO
+- diff_starter_era
+- diff_starter_fip
+- diff_starter_xfip
+- diff_starter_siera
+- diff_starter_whip
+- diff_starter_k_pct
+- diff_starter_bb_pct
+- diff_starter_kbb_pct
+- diff_starter_war
+- diff_starter_ip
+- run_margin
