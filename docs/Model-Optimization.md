@@ -30,6 +30,28 @@
 - 當環境缺少某模型時自動降級。
 - 支援時間序列切分（game_date）避免資料洩漏。
 
+### 3) 2022-2025 v6（投手狀態特徵）集成模型訓練結果
+- **訓練資料**：`data/training_2022_2025_enhanced_v6.csv`
+- **模型檔**：`models/mlb_v6_ensemble_pitcher_state.pkl`
+- **評估指標（time_series split）**：
+  - Train: 9,144 / Test: 2,287
+  - Accuracy: **54.53%**
+  - ROC-AUC: **0.5267**
+- **特徵數**：75
+- **使用特徵（完整清單）**：
+  - game_date_x, home_team, away_team, home_pitcher_mlbam, away_pitcher_mlbam, season, game_key, game_date_y
+  - home_roll5_runs_scored_mean, home_roll5_runs_allowed_mean, home_roll5_run_diff_mean, home_roll5_win_mean
+  - home_ha_roll5_runs_scored_mean, home_ha_roll5_runs_allowed_mean, home_ha_roll5_win_mean
+  - away_roll5_runs_scored_mean, away_roll5_runs_allowed_mean, away_roll5_run_diff_mean, away_roll5_win_mean
+  - away_ha_roll5_runs_scored_mean, away_ha_roll5_runs_allowed_mean, away_ha_roll5_win_mean
+  - home_h2h_games, home_h2h_win_pct, home_h2h_runs_scored_avg, home_h2h_runs_allowed_avg
+  - away_h2h_games, away_h2h_win_pct, away_h2h_runs_scored_avg, away_h2h_runs_allowed_avg
+  - home_p_ERA, home_p_WHIP, home_p_K%, home_p_BB%, home_p_K-BB%, home_p_FIP, home_p_xFIP, home_p_SIERA, home_p_WAR, home_p_IP
+  - away_p_ERA, away_p_WHIP, away_p_K%, away_p_BB%, away_p_K-BB%, away_p_FIP, away_p_xFIP, away_p_SIERA, away_p_WAR, away_p_IP
+  - home_bat_AVG, home_bat_OBP, home_bat_SLG, home_bat_OPS, home_bat_ISO, home_bat_wOBA, home_bat_wRC+, home_bat_BB%, home_bat_K%, home_bat_R, home_bat_HR, home_bat_SB
+  - away_bat_AVG, away_bat_OBP, away_bat_SLG, away_bat_OPS, away_bat_ISO, away_bat_wOBA, away_bat_wRC+, away_bat_BB%, away_bat_K%, away_bat_R, away_bat_HR, away_bat_SB
+  - diff_p_ERA, diff_p_WHIP, diff_p_K-BB%, diff_bat_wOBA, diff_bat_wRC+, diff_bat_OPS
+
 ## 使用方式
 ### 產生新版 v6 訓練集
 ```bash

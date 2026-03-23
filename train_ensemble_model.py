@@ -16,6 +16,7 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, VotingClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
+from sklearn.utils._tags import Tags, TargetTags, ClassifierTags
 import joblib
 
 import model_trainer
@@ -24,6 +25,15 @@ try:
     import xgboost as xgb
 except ImportError:  # pragma: no cover
     xgb = None
+
+if xgb is not None:
+    class XGBClassifierSklearn(xgb.XGBClassifier):
+        def __sklearn_tags__(self):  # pragma: no cover - compatibility shim
+            return Tags(
+                estimator_type="classifier",
+                target_tags=TargetTags(required=True, one_d_labels=True),
+                classifier_tags=ClassifierTags(),
+            )
 
 try:
     import lightgbm as lgb
@@ -67,7 +77,7 @@ def build_estimators(scale_pos_weight: Optional[float]) -> List[Tuple[str, objec
     estimators: List[Tuple[str, object]] = []
 
     if xgb is not None:
-        xgb_clf = xgb.XGBClassifier(
+        xgb_clf = XGBClassifierSklearn(
             n_estimators=900,
             max_depth=5,
             learning_rate=0.03,
