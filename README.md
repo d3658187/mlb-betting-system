@@ -74,6 +74,11 @@ pip install pybaseball
 - 對戰歷史（H2H）
 - 天氣（溫度、風向）
 
-## 聯絡
+## 文件
 
-- 授權：請勿用於實際投注
+- [數據字典](docs/Data-Dictionary.md) — 資料庫欄位、模型特徵說明
+- [模型文檔](docs/Model-Documentation.md) — 模型架構、訓練流程、預測邏輯
+
+## Issues
+
+追蹤系統問題：https://github.com/d3658187/mlb-betting-system/issues
