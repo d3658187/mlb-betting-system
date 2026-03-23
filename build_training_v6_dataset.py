@@ -261,6 +261,132 @@ def attach_h2h_features(base: pd.DataFrame) -> pd.DataFrame:
     return base
 
 
+def attach_pitcher_form_features(base: pd.DataFrame, window: int = 5, opp_window: int = 10) -> pd.DataFrame:
+    if base.empty:
+        return base
+
+    df = base.copy()
+    df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
+
+    home = df[[
+        "game_date",
+        "home_team",
+        "away_team",
+        "home_pitcher_mlbam",
+        "home_runs",
+        "away_runs",
+        "home_win",
+    ]].copy()
+    home["pitcher_mlbam"] = pd.to_numeric(home["home_pitcher_mlbam"], errors="coerce")
+    home["team"] = home["home_team"]
+    home["opponent"] = home["away_team"]
+    home["win"] = pd.to_numeric(home["home_win"], errors="coerce")
+    home["run_diff"] = pd.to_numeric(home["home_runs"], errors="coerce") - pd.to_numeric(home["away_runs"], errors="coerce")
+    home["is_home"] = True
+
+    away = df[[
+        "game_date",
+        "home_team",
+        "away_team",
+        "away_pitcher_mlbam",
+        "home_runs",
+        "away_runs",
+        "home_win",
+    ]].copy()
+    away["pitcher_mlbam"] = pd.to_numeric(away["away_pitcher_mlbam"], errors="coerce")
+    away["team"] = away["away_team"]
+    away["opponent"] = away["home_team"]
+    away["win"] = 1 - pd.to_numeric(away["home_win"], errors="coerce")
+    away["run_diff"] = pd.to_numeric(away["away_runs"], errors="coerce") - pd.to_numeric(away["home_runs"], errors="coerce")
+    away["is_home"] = False
+
+    pitcher_game = pd.concat([home, away], ignore_index=True)
+    pitcher_game = pitcher_game.dropna(subset=["pitcher_mlbam", "game_date"]).copy()
+    pitcher_game["game_key"] = (
+        pitcher_game["game_date"].dt.date.astype(str)
+        + "_"
+        + pitcher_game["home_team"].astype(str)
+        + "_"
+        + pitcher_game["away_team"].astype(str)
+    )
+
+    pitcher_game = pitcher_game.sort_values(["pitcher_mlbam", "game_date"])
+    group = pitcher_game.groupby("pitcher_mlbam", group_keys=False)
+
+    pitcher_game["pitcher_start_count"] = group.cumcount()
+    pitcher_game["pitcher_rest_days"] = (pitcher_game["game_date"] - group["game_date"].shift(1)).dt.days
+
+    for w in (window, window * 2):
+        pitcher_game[f"pitcher_roll{w}_win_pct"] = (
+            group["win"].rolling(window=w, min_periods=1).mean().shift(1).reset_index(level=0, drop=True)
+        )
+        pitcher_game[f"pitcher_roll{w}_run_diff_mean"] = (
+            group["run_diff"].rolling(window=w, min_periods=1).mean().shift(1).reset_index(level=0, drop=True)
+        )
+
+    group_opp = pitcher_game.groupby(["pitcher_mlbam", "opponent"], group_keys=False)
+    pitcher_game["pitcher_vs_opp_games"] = group_opp.cumcount()
+    pitcher_game["pitcher_vs_opp_win_pct"] = (
+        group_opp["win"].rolling(window=opp_window, min_periods=1).mean().shift(1).reset_index(level=[0, 1], drop=True)
+    )
+
+    base = base.copy()
+    base["game_key"] = (
+        base["game_date"].astype(str)
+        + "_"
+        + base["home_team"].astype(str)
+        + "_"
+        + base["away_team"].astype(str)
+    )
+
+    feat_cols = [
+        "game_key",
+        "pitcher_mlbam",
+        "pitcher_start_count",
+        "pitcher_rest_days",
+        f"pitcher_roll{window}_win_pct",
+        f"pitcher_roll{window * 2}_win_pct",
+        f"pitcher_roll{window}_run_diff_mean",
+        f"pitcher_roll{window * 2}_run_diff_mean",
+        "pitcher_vs_opp_games",
+        "pitcher_vs_opp_win_pct",
+        "is_home",
+    ]
+    feat = pitcher_game[feat_cols].copy()
+
+    home_feat = feat[feat["is_home"]].drop(columns=["is_home"], errors="ignore")
+    away_feat = feat[~feat["is_home"]].drop(columns=["is_home"], errors="ignore")
+
+    home_feat = home_feat.rename(columns={
+        "pitcher_mlbam": "home_pitcher_mlbam",
+        "pitcher_start_count": "home_pitcher_start_count",
+        "pitcher_rest_days": "home_pitcher_rest_days",
+        f"pitcher_roll{window}_win_pct": f"home_pitcher_roll{window}_win_pct",
+        f"pitcher_roll{window * 2}_win_pct": f"home_pitcher_roll{window * 2}_win_pct",
+        f"pitcher_roll{window}_run_diff_mean": f"home_pitcher_roll{window}_run_diff_mean",
+        f"pitcher_roll{window * 2}_run_diff_mean": f"home_pitcher_roll{window * 2}_run_diff_mean",
+        "pitcher_vs_opp_games": "home_pitcher_vs_opp_games",
+        "pitcher_vs_opp_win_pct": "home_pitcher_vs_opp_win_pct",
+    })
+    away_feat = away_feat.rename(columns={
+        "pitcher_mlbam": "away_pitcher_mlbam",
+        "pitcher_start_count": "away_pitcher_start_count",
+        "pitcher_rest_days": "away_pitcher_rest_days",
+        f"pitcher_roll{window}_win_pct": f"away_pitcher_roll{window}_win_pct",
+        f"pitcher_roll{window * 2}_win_pct": f"away_pitcher_roll{window * 2}_win_pct",
+        f"pitcher_roll{window}_run_diff_mean": f"away_pitcher_roll{window}_run_diff_mean",
+        f"pitcher_roll{window * 2}_run_diff_mean": f"away_pitcher_roll{window * 2}_run_diff_mean",
+        "pitcher_vs_opp_games": "away_pitcher_vs_opp_games",
+        "pitcher_vs_opp_win_pct": "away_pitcher_vs_opp_win_pct",
+    })
+
+    base = base.merge(home_feat, how="left", on=["game_key", "home_pitcher_mlbam"]).merge(
+        away_feat, how="left", on=["game_key", "away_pitcher_mlbam"]
+    )
+
+    return base
+
+
 # ---------------------
 # Enrichment
 # ---------------------
@@ -334,6 +460,12 @@ def enrich_with_stats(base: pd.DataFrame, py_dir: Path) -> pd.DataFrame:
             ("home_bat_wOBA", "away_bat_wOBA", "diff_bat_wOBA"),
             ("home_bat_wRC+", "away_bat_wRC+", "diff_bat_wRC+"),
             ("home_bat_OPS", "away_bat_OPS", "diff_bat_OPS"),
+            ("home_pitcher_roll5_win_pct", "away_pitcher_roll5_win_pct", "diff_pitcher_roll5_win_pct"),
+            ("home_pitcher_roll10_win_pct", "away_pitcher_roll10_win_pct", "diff_pitcher_roll10_win_pct"),
+            ("home_pitcher_roll5_run_diff_mean", "away_pitcher_roll5_run_diff_mean", "diff_pitcher_roll5_run_diff_mean"),
+            ("home_pitcher_roll10_run_diff_mean", "away_pitcher_roll10_run_diff_mean", "diff_pitcher_roll10_run_diff_mean"),
+            ("home_pitcher_rest_days", "away_pitcher_rest_days", "diff_pitcher_rest_days"),
+            ("home_pitcher_vs_opp_win_pct", "away_pitcher_vs_opp_win_pct", "diff_pitcher_vs_opp_win_pct"),
         ]
         for h, a, d in diff_pairs:
             df[d] = pd.to_numeric(df[h], errors="coerce") - pd.to_numeric(df[a], errors="coerce")
@@ -395,8 +527,9 @@ def main():
 
     base_with_roll = attach_rolling_features(base, window=5)
     base_with_h2h = attach_h2h_features(base_with_roll)
+    base_with_pitcher = attach_pitcher_form_features(base_with_h2h, window=5, opp_window=10)
 
-    enriched = enrich_with_stats(base_with_h2h, py_dir)
+    enriched = enrich_with_stats(base_with_pitcher, py_dir)
     if enriched.empty:
         raise SystemExit("Enriched dataset is empty (missing pybaseball stats for seasons?)")
 
