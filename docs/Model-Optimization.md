@@ -80,6 +80,20 @@
   - ROC-AUC: **0.5829**
 - **特徵數**：101
 
+## 6) 2022-2025 v8 Over/Under + Run Line（回歸）
+- **訓練資料**：`data/training_2022_2025_enhanced_v6.csv`
+- **標籤來源**：
+  - total_runs = home_runs + away_runs
+  - run_margin = home_runs - away_runs
+- **模型檔**：
+  - Over/Under：`models/mlb_v8_overunder.booster`
+  - Run Line：`models/mlb_v8_runline.booster`
+- **評估指標（time_series split）**：
+  - Over/Under MAE: **3.70** / RMSE: **4.73** / R2: **-0.0648**
+  - Run Line MAE: **3.61** / RMSE: **4.72** / R2: **-0.0535**
+- **特徵數**：76
+- **備註**：現有訓練集無 **cover_spread / 大小分盤口** 欄位，僅能回歸預測總得分與勝分差；若需盤口命中率評估，需串接 SportsdataIO / Odds API 等賠率資料。
+
 ## 使用方式
 ### 產生新版 v6 訓練集
 ```bash
