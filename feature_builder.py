@@ -226,6 +226,20 @@ def load_fangraphs_pitchers(engine, season: int) -> pd.DataFrame:
     return pd.read_sql(sql, engine, params={"season": season})
 
 
+def load_platoon_splits_csv(data_dir: str, season: int) -> pd.DataFrame:
+    path = Path(data_dir) / f"platoon_splits_{season}.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    if df.empty:
+        return pd.DataFrame()
+    if "mlbam_id" in df.columns:
+        df["mlbam_id"] = pd.to_numeric(df["mlbam_id"], errors="coerce")
+    if "season" in df.columns:
+        df["season"] = pd.to_numeric(df["season"], errors="coerce")
+    return df
+
+
 def load_bullpen_fatigue(engine, target_date: date) -> pd.DataFrame:
     sql = text(
         """
@@ -394,6 +408,62 @@ def _apply_fangraphs_pitcher_features(features: pd.DataFrame, fg_pitchers: pd.Da
         missing |= missing_away.any()
         if missing_away.any():
             logging.info("Starter FIP missing for %d away pitchers", int(missing_away.sum()))
+
+    return features, bool(missing)
+
+
+def _apply_platoon_splits_features(features: pd.DataFrame, platoon_df: pd.DataFrame) -> Tuple[pd.DataFrame, bool]:
+    if platoon_df.empty:
+        return features, False
+
+    required_cols = [
+        "platoon_ba_diff",
+        "platoon_ops_diff",
+        "platoon_k_rate_lhb",
+        "platoon_k_rate_rhb",
+        "platoon_splits_score",
+    ]
+    if "mlbam_id" not in platoon_df.columns:
+        return features, False
+
+    platoon_df = platoon_df.copy()
+    platoon_df["mlbam_id"] = pd.to_numeric(platoon_df["mlbam_id"], errors="coerce")
+
+    avail_cols = [c for c in required_cols if c in platoon_df.columns]
+    if not avail_cols:
+        return features, False
+
+    for col in avail_cols:
+        platoon_df[col] = pd.to_numeric(platoon_df[col], errors="coerce")
+
+    pmap = platoon_df.set_index("mlbam_id")[avail_cols].to_dict("index")
+
+    missing = False
+    if "home_pitcher_mlb_id" in features.columns:
+        for col in avail_cols:
+            features[f"home_{col}"] = features["home_pitcher_mlb_id"].map(
+                lambda pid, c=col: pmap.get(pid, {}).get(c)
+            )
+        if "home_platoon_ba_diff" in features.columns:
+            missing_home = (
+                features["home_pitcher_mlb_id"].notna() & features["home_platoon_ba_diff"].isna()
+            )
+            missing |= missing_home.any()
+            if missing_home.any():
+                logging.info("Platoon splits missing for %d home pitchers", int(missing_home.sum()))
+
+    if "away_pitcher_mlb_id" in features.columns:
+        for col in avail_cols:
+            features[f"away_{col}"] = features["away_pitcher_mlb_id"].map(
+                lambda pid, c=col: pmap.get(pid, {}).get(c)
+            )
+        if "away_platoon_ba_diff" in features.columns:
+            missing_away = (
+                features["away_pitcher_mlb_id"].notna() & features["away_platoon_ba_diff"].isna()
+            )
+            missing |= missing_away.any()
+            if missing_away.any():
+                logging.info("Platoon splits missing for %d away pitchers", int(missing_away.sum()))
 
     return features, bool(missing)
 
@@ -1107,6 +1177,15 @@ def build_features(
     except Exception:
         logging.warning("Statcast pitcher data unavailable; skipping.")
 
+    # Platoon splits (pybaseball / Baseball Reference)
+    try:
+        platoon_dir = Path(__file__).resolve().parent / "data" / "pybaseball"
+        platoon_df = load_platoon_splits_csv(str(platoon_dir), season)
+        if not platoon_df.empty:
+            features, _ = _apply_platoon_splits_features(features, platoon_df)
+    except Exception:
+        logging.warning("Platoon splits data unavailable; skipping.")
+
     # pybaseball integration (B-layer on-demand補值)
     try:
         features = attach_fangraphs_features(features, engine, season)
@@ -1318,6 +1397,16 @@ def build_features(
         "home_pitcher_woba_vs_r",
         "away_pitcher_woba_vs_l",
         "away_pitcher_woba_vs_r",
+        "home_platoon_ba_diff",
+        "away_platoon_ba_diff",
+        "home_platoon_ops_diff",
+        "away_platoon_ops_diff",
+        "home_platoon_k_rate_lhb",
+        "away_platoon_k_rate_lhb",
+        "home_platoon_k_rate_rhb",
+        "away_platoon_k_rate_rhb",
+        "home_platoon_splits_score",
+        "away_platoon_splits_score",
         "home_price",
         "away_price",
         "tw_home_ml_odds",
@@ -1469,6 +1558,24 @@ def load_pybaseball_pitcher_stats(data_dir: str, seasons: Sequence[int]) -> pd.D
     df = pd.concat(frames, ignore_index=True)
     if "Season" in df.columns and "season" not in df.columns:
         df = df.rename(columns={"Season": "season"})
+    if "season" in df.columns:
+        df["season"] = pd.to_numeric(df["season"], errors="coerce")
+    if "mlbam_id" in df.columns:
+        df["mlbam_id"] = pd.to_numeric(df["mlbam_id"], errors="coerce")
+    return df
+
+
+def load_pybaseball_platoon_splits(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame:
+    paths = []
+    for season in seasons:
+        path = Path(data_dir) / f"platoon_splits_{season}.csv"
+        if path.exists():
+            paths.append(path)
+    if not paths:
+        return pd.DataFrame()
+
+    frames = [pd.read_csv(p) for p in paths]
+    df = pd.concat(frames, ignore_index=True)
     if "season" in df.columns:
         df["season"] = pd.to_numeric(df["season"], errors="coerce")
     if "mlbam_id" in df.columns:
@@ -1721,6 +1828,40 @@ def build_historical_features_from_csv(
                 left_on=["season", "away_pitcher_mlbam"],
                 right_on=["season", "mlbam_id"],
             ).drop(columns=["mlbam_id"], errors="ignore")
+
+    platoon = load_pybaseball_platoon_splits(data_dir, seasons)
+    if not platoon.empty:
+        required_cols = [
+            "platoon_ba_diff",
+            "platoon_ops_diff",
+            "platoon_k_rate_lhb",
+            "platoon_k_rate_rhb",
+            "platoon_splits_score",
+        ]
+        avail_cols = [c for c in required_cols if c in platoon.columns]
+        if avail_cols:
+            for col in avail_cols:
+                platoon[col] = pd.to_numeric(platoon[col], errors="coerce")
+
+            if "home_pitcher_mlbam" in games.columns:
+                home_platoon = platoon[["season", "mlbam_id"] + avail_cols].copy()
+                home_platoon = home_platoon.rename(
+                    columns={
+                        "mlbam_id": "home_pitcher_mlbam",
+                        **{c: f"home_{c}" for c in avail_cols},
+                    }
+                )
+                games = games.merge(home_platoon, how="left", on=["season", "home_pitcher_mlbam"])
+
+            if "away_pitcher_mlbam" in games.columns:
+                away_platoon = platoon[["season", "mlbam_id"] + avail_cols].copy()
+                away_platoon = away_platoon.rename(
+                    columns={
+                        "mlbam_id": "away_pitcher_mlbam",
+                        **{c: f"away_{c}" for c in avail_cols},
+                    }
+                )
+                games = games.merge(away_platoon, how="left", on=["season", "away_pitcher_mlbam"])
 
     # Derived diffs
     diff_cols = []

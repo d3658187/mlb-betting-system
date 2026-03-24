@@ -71,6 +71,11 @@
 | era_calc | 計算防禦率 |
 | starter_era_last3/5/10 | 近3/5/10場 ERA |
 | starter_whip_last5/10 | 近5/10場 WHIP |
+| platoon_ba_diff | vs LHB 與 vs RHB 打擊率差 |
+| platoon_ops_diff | vs LHB 與 vs RHB OPS 差 |
+| platoon_k_rate_lhb | 對左打三振率 (SO/PA) |
+| platoon_k_rate_rhb | 對右打三振率 (SO/PA) |
+| platoon_splits_score | 綜合 platoon 差距指標 |
 
 ### 牛棚特徵
 | 特徵 | 說明 |
