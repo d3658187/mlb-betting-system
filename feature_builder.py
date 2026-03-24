@@ -227,16 +227,22 @@ def load_fangraphs_pitchers(engine, season: int) -> pd.DataFrame:
 
 
 def load_platoon_splits_csv(data_dir: str, season: int) -> pd.DataFrame:
-    path = Path(data_dir) / f"platoon_splits_{season}.csv"
-    if not path.exists():
-        return pd.DataFrame()
-    df = pd.read_csv(path)
+    merged_path = Path(data_dir) / "platoon_splits_merged.csv"
+    if merged_path.exists():
+        df = pd.read_csv(merged_path)
+    else:
+        path = Path(data_dir) / f"platoon_splits_{season}.csv"
+        if not path.exists():
+            return pd.DataFrame()
+        df = pd.read_csv(path)
+
     if df.empty:
         return pd.DataFrame()
     if "mlbam_id" in df.columns:
         df["mlbam_id"] = pd.to_numeric(df["mlbam_id"], errors="coerce")
     if "season" in df.columns:
         df["season"] = pd.to_numeric(df["season"], errors="coerce")
+        df = df[df["season"] == season]
     return df
 
 
@@ -1566,18 +1572,23 @@ def load_pybaseball_pitcher_stats(data_dir: str, seasons: Sequence[int]) -> pd.D
 
 
 def load_pybaseball_platoon_splits(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame:
-    paths = []
-    for season in seasons:
-        path = Path(data_dir) / f"platoon_splits_{season}.csv"
-        if path.exists():
-            paths.append(path)
-    if not paths:
-        return pd.DataFrame()
+    merged_path = Path(data_dir) / "platoon_splits_merged.csv"
+    if merged_path.exists():
+        df = pd.read_csv(merged_path)
+    else:
+        paths = []
+        for season in seasons:
+            path = Path(data_dir) / f"platoon_splits_{season}.csv"
+            if path.exists():
+                paths.append(path)
+        if not paths:
+            return pd.DataFrame()
+        frames = [pd.read_csv(p) for p in paths]
+        df = pd.concat(frames, ignore_index=True)
 
-    frames = [pd.read_csv(p) for p in paths]
-    df = pd.concat(frames, ignore_index=True)
     if "season" in df.columns:
         df["season"] = pd.to_numeric(df["season"], errors="coerce")
+        df = df[df["season"].isin(seasons)]
     if "mlbam_id" in df.columns:
         df["mlbam_id"] = pd.to_numeric(df["mlbam_id"], errors="coerce")
     return df
@@ -1843,25 +1854,32 @@ def build_historical_features_from_csv(
             for col in avail_cols:
                 platoon[col] = pd.to_numeric(platoon[col], errors="coerce")
 
+            # Use latest season per pitcher to maximize coverage
+            platoon_latest = (
+                platoon.dropna(subset=["mlbam_id"])
+                .sort_values("season")
+                .drop_duplicates(subset=["mlbam_id"], keep="last")
+            )
+
             if "home_pitcher_mlbam" in games.columns:
-                home_platoon = platoon[["season", "mlbam_id"] + avail_cols].copy()
+                home_platoon = platoon_latest[["mlbam_id"] + avail_cols].copy()
                 home_platoon = home_platoon.rename(
                     columns={
                         "mlbam_id": "home_pitcher_mlbam",
                         **{c: f"home_{c}" for c in avail_cols},
                     }
                 )
-                games = games.merge(home_platoon, how="left", on=["season", "home_pitcher_mlbam"])
+                games = games.merge(home_platoon, how="left", on=["home_pitcher_mlbam"])
 
             if "away_pitcher_mlbam" in games.columns:
-                away_platoon = platoon[["season", "mlbam_id"] + avail_cols].copy()
+                away_platoon = platoon_latest[["mlbam_id"] + avail_cols].copy()
                 away_platoon = away_platoon.rename(
                     columns={
                         "mlbam_id": "away_pitcher_mlbam",
                         **{c: f"away_{c}" for c in avail_cols},
                     }
                 )
-                games = games.merge(away_platoon, how="left", on=["season", "away_pitcher_mlbam"])
+                games = games.merge(away_platoon, how="left", on=["away_pitcher_mlbam"])
 
     # Derived diffs
     diff_cols = []

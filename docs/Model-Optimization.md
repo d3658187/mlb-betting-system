@@ -55,11 +55,12 @@
 ### 4) 2022-2025 Platoon Splits（feature_builder historical）集成模型訓練結果
 - **訓練資料**：`data/training_2022_2025_platoon.csv`
 - **資料筆數**：總計 10,685；標註 (home_win) 801
+- **Platoon Splits 覆蓋率**：**100%**（home/away 皆完整）
 - **模型檔**：`models/mlb_v6_ensemble_platoon.pkl`
 - **評估指標（time_series split）**：
   - Train: 640 / Test: 161
   - Accuracy: **45.96%**
-  - ROC-AUC: **0.4375**
+  - ROC-AUC: **0.4274**
 - **特徵數**：2,293
 - **Platoon Splits 特徵**：
   - home_platoon_ba_diff, home_platoon_ops_diff, home_platoon_k_rate_lhb, home_platoon_k_rate_rhb
