@@ -1,0 +1,114 @@
+{
+  "top15": [
+    [
+      "diff_pit_W",
+      0.015145017765462399
+    ],
+    [
+      "away_pit_kwERA",
+      0.012832876294851303
+    ],
+    [
+      "diff_pit_IFFB",
+      0.01131686381995678
+    ],
+    [
+      "diff_bat_HardHit%",
+      0.009461470879614353
+    ],
+    [
+      "diff_pit_Stf+ CH",
+      0.008172338828444481
+    ],
+    [
+      "diff_pit_SwStr%",
+      0.007481283042579889
+    ],
+    [
+      "diff_pit_Pulls",
+      0.0068757180124521255
+    ],
+    [
+      "diff_pit_vCU (sc)",
+      0.006872322876006365
+    ],
+    [
+      "away_pit_SIERA",
+      0.006536499597132206
+    ],
+    [
+      "diff_bat_IFH",
+      0.006024991627782583
+    ],
+    [
+      "diff_pit_Contact% (sc)",
+      0.005876143462955952
+    ],
+    [
+      "away_pit_O-Contact% (sc)",
+      0.0057910652831196785
+    ],
+    [
+      "away_pit_SI-X (pi)",
+      0.005764864385128021
+    ],
+    [
+      "diff_bat_vFA (pi)",
+      0.005335009191185236
+    ],
+    [
+      "diff_pit_Start-IP",
+      0.0052509126253426075
+    ]
+  ],
+  "platoon_features": [
+    [
+      "home_platoon_ba_diff",
+      0.0
+    ],
+    [
+      "home_platoon_ops_diff",
+      0.0
+    ],
+    [
+      "home_platoon_k_rate_lhb",
+      0.0
+    ],
+    [
+      "home_platoon_k_rate_rhb",
+      0.0
+    ],
+    [
+      "away_platoon_ba_diff",
+      0.0
+    ],
+    [
+      "away_platoon_ops_diff",
+      0.0
+    ],
+    [
+      "away_platoon_k_rate_lhb",
+      0.0
+    ],
+    [
+      "away_platoon_k_rate_rhb",
+      0.0
+    ],
+    [
+      "diff_platoon_ba_diff",
+      0.0
+    ],
+    [
+      "diff_platoon_ops_diff",
+      0.0
+    ],
+    [
+      "diff_platoon_k_rate_lhb",
+      0.0
+    ],
+    [
+      "diff_platoon_k_rate_rhb",
+      0.0
+    ]
+  ]
+}

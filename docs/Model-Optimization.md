@@ -52,6 +52,23 @@
   - away_bat_AVG, away_bat_OBP, away_bat_SLG, away_bat_OPS, away_bat_ISO, away_bat_wOBA, away_bat_wRC+, away_bat_BB%, away_bat_K%, away_bat_R, away_bat_HR, away_bat_SB
   - diff_p_ERA, diff_p_WHIP, diff_p_K-BB%, diff_bat_wOBA, diff_bat_wRC+, diff_bat_OPS
 
+### 4) 2022-2025 Platoon Splits（feature_builder historical）集成模型訓練結果
+- **訓練資料**：`data/training_2022_2025_platoon.csv`
+- **資料筆數**：總計 10,685；標註 (home_win) 801
+- **模型檔**：`models/mlb_v6_ensemble_platoon.pkl`
+- **評估指標（time_series split）**：
+  - Train: 640 / Test: 161
+  - Accuracy: **45.96%**
+  - ROC-AUC: **0.4375**
+- **特徵數**：2,293
+- **Platoon Splits 特徵**：
+  - home_platoon_ba_diff, home_platoon_ops_diff, home_platoon_k_rate_lhb, home_platoon_k_rate_rhb
+  - away_platoon_ba_diff, away_platoon_ops_diff, away_platoon_k_rate_lhb, away_platoon_k_rate_rhb
+  - diff_platoon_ba_diff, diff_platoon_ops_diff, diff_platoon_k_rate_lhb, diff_platoon_k_rate_rhb
+- **特徵重要性檢查（XGBoost 探查）**：
+  - Platoon Splits 欄位重要性均為 0（未進入 Top 15）
+  - 明細：`models/mlb_v6_platoon_feature_importance.json`
+
 ## 使用方式
 ### 產生新版 v6 訓練集
 ```bash
