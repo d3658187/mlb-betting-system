@@ -183,6 +183,26 @@ def insert_odds_rows(engine, rows: List[Dict]):
         conn.execute(sql, rows)
 
 
+def build_game_id_lookup(games_df: pd.DataFrame) -> Dict[Tuple[str, str, str], str]:
+    team_map = taiwan_lottery_crawler.load_team_name_map()
+    lookup = {}
+    for _, row in games_df.iterrows():
+        away = taiwan_lottery_crawler.normalize_team_name(row["away_team_name"], team_map)
+        home = taiwan_lottery_crawler.normalize_team_name(row["home_team_name"], team_map)
+        key = (row["game_date"].isoformat(), away, home)
+        lookup[key] = row["game_id"]
+    return lookup
+
+
+def load_manual_odds_json_to_df(path: str, games_df: pd.DataFrame) -> pd.DataFrame:
+    games = taiwan_lottery_crawler.load_manual_odds_json(path)
+    lookup = build_game_id_lookup(games_df)
+    rows = taiwan_lottery_crawler.format_for_db(games, lookup)
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
 # ---------------------
 # Refresh helpers
 # ---------------------
@@ -821,6 +841,14 @@ def parse_args():
     p.add_argument("--refresh-odds", action="store_true", help="Fetch Taiwan odds and insert into DB")
     p.add_argument("--odds-url", help="Override Taiwan odds page URL")
     p.add_argument("--odds-file", help="Path to manual odds JSON (GameOdds format)")
+    p.add_argument(
+        "--odds-api",
+        nargs="?",
+        const="auto",
+        default=None,
+        help="Use The Odds API JSON file. Default path: data/odds/the-odds-api_YYYY-MM-DD.json. "
+             "Use '--odds-api only' to replace Taiwan odds; or pass a file path.",
+    )
     return p.parse_args()
 
 
@@ -853,6 +881,26 @@ def main():
     features["run_margin_pred"] = predict_run_margin(run_margin_model, features, run_margin_cols)
 
     odds_df = load_odds(engine, target_date)
+
+    if args.odds_api:
+        replace_only = str(args.odds_api).lower() in {"only", "replace"}
+        if str(args.odds_api).lower() in {"auto", "only", "replace"}:
+            odds_api_path = Path("data/odds") / f"the-odds-api_{target_date.isoformat()}.json"
+        else:
+            odds_api_path = Path(args.odds_api)
+
+        if not odds_api_path.exists():
+            logging.warning("The Odds API JSON not found: %s", odds_api_path)
+        else:
+            odds_api_df = load_manual_odds_json_to_df(str(odds_api_path), games_df)
+            if odds_api_df.empty:
+                logging.warning("The Odds API JSON loaded but no odds matched to games.")
+            else:
+                if replace_only or odds_df.empty:
+                    odds_df = odds_api_df
+                else:
+                    odds_df = pd.concat([odds_df, odds_api_df], ignore_index=True)
+                logging.info("Loaded %d odds rows from The Odds API", len(odds_api_df))
 
     # Clamp vig rate into Taiwan lottery range (10-15%)
     vig_rate = max(0.10, min(0.15, args.vig_rate))
