@@ -70,6 +70,16 @@
   - Platoon Splits 欄位重要性均為 0（未進入 Top 15）
   - 明細：`models/mlb_v6_platoon_feature_importance.json`
 
+### 5) 2022-2024 Platoon Splits（完整標籤 v7）集成模型訓練結果
+- **訓練資料**：`data/training_2022_2024_platoon.csv`
+- **Platoon Splits 覆蓋率**：主場 97.3%、客場 96.9%
+- **模型檔**：`models/mlb_v7_ensemble_platoon.pkl`
+- **評估指標（time_series split）**：
+  - Train: 6,808 / Test: 1,703
+  - Accuracy: **54.73%**
+  - ROC-AUC: **0.5829**
+- **特徵數**：101
+
 ## 使用方式
 ### 產生新版 v6 訓練集
 ```bash
