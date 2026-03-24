@@ -71,6 +71,32 @@ def _find_col(columns: Sequence[str], candidates: Sequence[str]) -> Optional[str
     return None
 
 
+def _resolve_runs(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+    """Prefer home/away_runs, fallback to home/away_score.
+
+    Returns numeric Series (may be all-NA). Also backfills existing
+    run/score columns in-place when available.
+    """
+    home_runs = pd.to_numeric(df["home_runs"], errors="coerce") if "home_runs" in df.columns else pd.Series(pd.NA, index=df.index)
+    away_runs = pd.to_numeric(df["away_runs"], errors="coerce") if "away_runs" in df.columns else pd.Series(pd.NA, index=df.index)
+    home_score = pd.to_numeric(df["home_score"], errors="coerce") if "home_score" in df.columns else pd.Series(pd.NA, index=df.index)
+    away_score = pd.to_numeric(df["away_score"], errors="coerce") if "away_score" in df.columns else pd.Series(pd.NA, index=df.index)
+
+    home_final = home_runs.combine_first(home_score)
+    away_final = away_runs.combine_first(away_score)
+
+    if "home_score" in df.columns:
+        df["home_score"] = home_score.combine_first(home_final)
+    if "away_score" in df.columns:
+        df["away_score"] = away_score.combine_first(away_final)
+    if "home_runs" in df.columns:
+        df["home_runs"] = home_runs.combine_first(home_final)
+    if "away_runs" in df.columns:
+        df["away_runs"] = away_runs.combine_first(away_final)
+
+    return home_final, away_final
+
+
 def load_team_abbrev_map(engine) -> pd.DataFrame:
     try:
         df = pd.read_sql("SELECT mlb_team_id, abbreviation FROM teams", engine)
@@ -1289,10 +1315,9 @@ def build_features(
     except Exception:
         logging.warning("Results table not ready; skipping labels.")
 
-    if "home_score" in features.columns and "away_score" in features.columns:
-        features["home_score"] = pd.to_numeric(features["home_score"], errors="coerce")
-        features["away_score"] = pd.to_numeric(features["away_score"], errors="coerce")
-        features["run_margin"] = features["home_score"] - features["away_score"]
+    home_runs, away_runs = _resolve_runs(features)
+    if home_runs.notna().any() or away_runs.notna().any():
+        features["run_margin"] = home_runs - away_runs
 
     if "run_margin" in features.columns:
         if "home_win" not in features.columns:
@@ -1338,6 +1363,8 @@ def build_features(
 
     # Ensure optional/label columns exist for schema consistency
     optional_cols = [
+        "home_runs",
+        "away_runs",
         "home_score",
         "away_score",
         "home_win",
@@ -1459,6 +1486,63 @@ def write_features_to_db(engine, df: pd.DataFrame, table_name: str = "model_feat
 # Historical (CSV / pybaseball)
 # ---------------------
 
+def _attach_db_results(games: pd.DataFrame) -> pd.DataFrame:
+    """Fill missing home_score/away_score/home_win from DB when available."""
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url or games.empty:
+        return games
+    try:
+        engine = get_engine()
+    except Exception:
+        return games
+
+    for col in ["home_score", "away_score", "home_win"]:
+        if col not in games.columns:
+            games[col] = pd.NA
+
+    missing_mask = games["home_score"].isna() | games["away_score"].isna() | games["home_win"].isna()
+    if not missing_mask.any():
+        return games
+
+    start_date = games["game_date"].min()
+    end_date = games["game_date"].max()
+    sql = text(
+        """
+        SELECT g.game_date,
+               th.abbreviation AS home_team,
+               ta.abbreviation AS away_team,
+               r.home_score,
+               r.away_score,
+               r.home_win
+          FROM games g
+          JOIN teams th ON th.id = g.home_team_id
+          JOIN teams ta ON ta.id = g.away_team_id
+          JOIN game_results r ON r.game_id = g.id
+         WHERE g.game_date BETWEEN :start_date AND :end_date
+        """
+    )
+    try:
+        results = pd.read_sql(sql, engine, params={"start_date": start_date, "end_date": end_date})
+    except Exception:
+        return games
+
+    if results.empty:
+        return games
+
+    results["game_date"] = pd.to_datetime(results["game_date"]).dt.date
+    for col in ["home_team", "away_team"]:
+        results[col] = results[col].astype(str)
+
+    merged = games.merge(results, how="left", on=["game_date", "home_team", "away_team"], suffixes=("", "_db"))
+    for col in ["home_score", "away_score", "home_win"]:
+        db_col = f"{col}_db"
+        if db_col in merged.columns:
+            merged[col] = merged[col].combine_first(merged[db_col])
+            merged = merged.drop(columns=[db_col])
+
+    return merged
+
+
 def load_pybaseball_games(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame:
     """Load schedule from starting_pitchers CSVs and attach results if available."""
     schedule_paths = []
@@ -1520,6 +1604,9 @@ def load_pybaseball_games(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame
     for col in ["home_score", "away_score", "home_win"]:
         if col not in games.columns:
             games[col] = pd.NA
+
+    # DB fallback for missing results (if DATABASE_URL available)
+    games = _attach_db_results(games)
 
     return games
 
@@ -1624,6 +1711,10 @@ def load_pybaseball_starting_pitchers(data_dir: str, seasons: Sequence[int]) -> 
 
 def _build_team_game_log(games: pd.DataFrame) -> pd.DataFrame:
     games = games.copy()
+    home_runs, away_runs = _resolve_runs(games)
+    games["_home_runs_resolved"] = home_runs
+    games["_away_runs_resolved"] = away_runs
+
     games["game_key"] = (
         games["game_date"].astype(str)
         + "_"
@@ -1637,15 +1728,15 @@ def _build_team_game_log(games: pd.DataFrame) -> pd.DataFrame:
         "game_date",
         "home_team",
         "away_team",
-        "home_score",
-        "away_score",
+        "_home_runs_resolved",
+        "_away_runs_resolved",
         "home_win",
         "season",
     ]].copy()
     home["team"] = home["home_team"]
     home["opponent"] = home["away_team"]
-    home["runs_scored"] = pd.to_numeric(home["home_score"], errors="coerce")
-    home["runs_allowed"] = pd.to_numeric(home["away_score"], errors="coerce")
+    home["runs_scored"] = pd.to_numeric(home["_home_runs_resolved"], errors="coerce")
+    home["runs_allowed"] = pd.to_numeric(home["_away_runs_resolved"], errors="coerce")
     home["win"] = pd.to_numeric(home["home_win"], errors="coerce")
     home["is_home"] = True
 
@@ -1654,15 +1745,15 @@ def _build_team_game_log(games: pd.DataFrame) -> pd.DataFrame:
         "game_date",
         "home_team",
         "away_team",
-        "home_score",
-        "away_score",
+        "_home_runs_resolved",
+        "_away_runs_resolved",
         "home_win",
         "season",
     ]].copy()
     away["team"] = away["away_team"]
     away["opponent"] = away["home_team"]
-    away["runs_scored"] = pd.to_numeric(away["away_score"], errors="coerce")
-    away["runs_allowed"] = pd.to_numeric(away["home_score"], errors="coerce")
+    away["runs_scored"] = pd.to_numeric(away["_away_runs_resolved"], errors="coerce")
+    away["runs_allowed"] = pd.to_numeric(away["_home_runs_resolved"], errors="coerce")
     away["win"] = 1 - pd.to_numeric(away["home_win"], errors="coerce")
     away["is_home"] = False
 
@@ -1890,10 +1981,9 @@ def build_historical_features_from_csv(
             games[diff_col] = pd.to_numeric(games[col], errors="coerce") - pd.to_numeric(games[col.replace("home_", "away_")], errors="coerce")
             diff_cols.append(diff_col)
 
-    # Labels
-    games["home_score"] = pd.to_numeric(games.get("home_score"), errors="coerce")
-    games["away_score"] = pd.to_numeric(games.get("away_score"), errors="coerce")
-    games["run_margin"] = games["home_score"] - games["away_score"]
+    # Labels (prefer home/away_runs if present)
+    home_runs, away_runs = _resolve_runs(games)
+    games["run_margin"] = home_runs - away_runs
     games["home_win"] = pd.to_numeric(games.get("home_win"), errors="coerce")
 
     return games
