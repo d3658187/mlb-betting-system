@@ -261,39 +261,153 @@ def write_csv(rows: List[Dict[str, Optional[float]]], path: str) -> None:
     logging.info("Wrote %d rows -> %s", len(df), path)
 
 
+def _load_processed_ids(path: str) -> set[int]:
+    if not path or not os.path.exists(path):
+        return set()
+    try:
+        df = pd.read_csv(path, usecols=["mlbam_id"])
+    except Exception as exc:
+        logging.warning("Failed to read existing CSV %s: %s", path, exc)
+        return set()
+    if df.empty or "mlbam_id" not in df.columns:
+        return set()
+    ids = pd.to_numeric(df["mlbam_id"], errors="coerce").dropna().astype(int).tolist()
+    return set(ids)
+
+
+def _append_row(row: Dict[str, Optional[float]], path: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True) if os.path.dirname(path) else None
+    file_exists = os.path.exists(path) and os.path.getsize(path) > 0
+    df = pd.DataFrame([row])
+    df.to_csv(path, mode="a" if file_exists else "w", header=not file_exists, index=False)
+
+
+def crawl_with_checkpoint(
+    season: int,
+    mlbam_ids: List[int],
+    out_path: str,
+    limit: Optional[int] = None,
+) -> Dict[str, int]:
+    if get_splits is None:
+        raise RuntimeError("pybaseball is not installed; run pip install pybaseball")
+
+    mlbam_ids = [int(x) for x in mlbam_ids if x is not None]
+    if limit:
+        mlbam_ids = mlbam_ids[:limit]
+
+    processed_ids = _load_processed_ids(out_path)
+    if processed_ids:
+        logging.info("Checkpoint loaded: %d pitchers already processed", len(processed_ids))
+
+    mapping, name_map = _map_mlbam_to_bbref(mlbam_ids)
+
+    last_ts: Optional[float] = None
+    missing = 0
+    fetched = 0
+    skipped = 0
+
+    for mlbam_id in mlbam_ids:
+        if mlbam_id in processed_ids:
+            skipped += 1
+            continue
+
+        bbref_id = mapping.get(mlbam_id)
+        if not bbref_id:
+            missing += 1
+            continue
+
+        last_ts = _rate_limit(last_ts)
+        try:
+            df = get_splits(bbref_id, year=season, pitching_splits=True)
+        except Exception as exc:
+            logging.warning("get_splits failed for %s (%s): %s", mlbam_id, bbref_id, exc)
+            continue
+
+        feats = _extract_platoon_features(df)
+        if not feats:
+            logging.warning("No platoon splits for %s (%s)", mlbam_id, bbref_id)
+            continue
+
+        row = {
+            "season": season,
+            "mlbam_id": mlbam_id,
+            "bbref_id": bbref_id,
+            "name": name_map.get(mlbam_id),
+        }
+        row.update(feats)
+        _append_row(row, out_path)
+        fetched += 1
+        processed_ids.add(mlbam_id)
+        logging.info("Wrote platoon splits for %s (%s)", mlbam_id, bbref_id)
+
+    if missing:
+        logging.warning("Missing BBRef ID mapping for %d pitchers", missing)
+
+    logging.info("Checkpoint run complete: fetched=%d skipped=%d", fetched, skipped)
+    return {"fetched": fetched, "skipped": skipped, "missing": missing}
+
+
 # ---------------------
 # CLI
 # ---------------------
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--season", type=int, required=True)
+    p.add_argument("--seasons", type=str, required=True, help="Season or range, e.g. '2025' or '2022-2025'")
     p.add_argument("--mlbam-ids", type=str, help="Comma-separated MLBAM pitcher IDs")
-    p.add_argument("--pitcher-csv", type=str, help="CSV containing pitcher MLBAM IDs")
+    p.add_argument("--pitcher-csv", type=str, help="CSV containing pitcher MLBAM IDs (can use {season} placeholder)")
     p.add_argument("--out", type=str, help="Output CSV path")
-    p.add_argument("--limit", type=int, help="Limit number of pitchers (for testing)")
+    p.add_argument("--limit", type=int, help="Limit number of pitchers per season (for testing)")
     return p.parse_args()
+
+
+def _parse_seasons(seasons_str: str) -> List[int]:
+    """Parse '2022-2025' or '2022,2023,2025' into list of ints."""
+    seasons = []
+    for part in seasons_str.split(","):
+        part = part.strip()
+        if "-" in part:
+            start, end = part.split("-")
+            seasons.extend(range(int(start.strip()), int(end.strip()) + 1))
+        else:
+            seasons.append(int(part))
+    return sorted(set(seasons))
 
 
 def main():
     args = parse_args()
 
-    if not args.mlbam_ids and not args.pitcher_csv:
-        raise SystemExit("Provide --mlbam-ids or --pitcher-csv")
+    seasons = _parse_seasons(args.seasons)
+    logging.info(f"Running for seasons: {seasons}")
 
-    mlbam_ids: List[int] = []
-    if args.mlbam_ids:
-        mlbam_ids = [int(x.strip()) for x in args.mlbam_ids.split(",") if x.strip()]
-    elif args.pitcher_csv:
-        mlbam_ids = _load_ids_from_csv(args.pitcher_csv)
+    out_path = args.out or f"./data/pybaseball/platoon_splits_{args.seasons.replace('-','_')}.csv"
 
-    if not mlbam_ids:
-        raise SystemExit("No valid MLBAM IDs found")
+    for season in seasons:
+        if args.pitcher_csv:
+            pitcher_csv = args.pitcher_csv.format(season=season)
+        else:
+            pitcher_csv = None
 
-    rows = fetch_platoon_splits(args.season, mlbam_ids, limit=args.limit)
+        mlbam_ids: List[int] = []
+        if args.mlbam_ids:
+            mlbam_ids = [int(x.strip()) for x in args.mlbam_ids.split(",") if x.strip()]
+        elif pitcher_csv:
+            if os.path.exists(pitcher_csv):
+                mlbam_ids = _load_ids_from_csv(pitcher_csv)
+            else:
+                logging.warning(f"Pitcher CSV not found for season {season}: {pitcher_csv}, skipping")
+                continue
+        else:
+            raise SystemExit("Provide --mlbam-ids or --pitcher-csv")
 
-    out_path = args.out or f"./data/pybaseball/platoon_splits_{args.season}.csv"
-    write_csv(rows, out_path)
+        if not mlbam_ids:
+            logging.warning(f"No MLBAM IDs found for season {season}, skipping")
+            continue
+
+        logging.info(f"Crawling season {season}: {len(mlbam_ids)} pitchers")
+        crawl_with_checkpoint(season, mlbam_ids, out_path, limit=args.limit)
+
+    logging.info(f"All seasons complete. Output: {out_path}")
 
 
 if __name__ == "__main__":
