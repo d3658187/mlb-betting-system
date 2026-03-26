@@ -526,6 +526,7 @@ def main():
         logging.info("No new games to append")
         return
 
+    results_df = results_df.drop(columns=["game_key"], errors="ignore")
     results_df = build_training_rows(results_df, py_dir)
 
     # order columns
