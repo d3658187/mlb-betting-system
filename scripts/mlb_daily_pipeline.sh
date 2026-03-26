@@ -66,4 +66,24 @@ else
     log "  Skipping predictor (no odds data)"
 fi
 
+# Step 4: Fetch completed results (yesterday)
+RESULT_DATE=$(date -v-1d +%Y-%m-%d)
+RESULTS_DIR="$PROJECT_DIR/data/results"
+mkdir -p "$RESULTS_DIR"
+log "Step 4: Fetching completed results for $RESULT_DATE..."
+python3 "$PROJECT_DIR/fetch_results.py" \
+    --date "$RESULT_DATE" \
+    2>&1 | tee -a "$LOG_DIR/mlb_daily_$TODAY.log" || true
+
+# Step 5: Update training data
+log "Step 5: Updating training data..."
+python3 "$PROJECT_DIR/update_training_data.py" \
+    --date "$RESULT_DATE" \
+    2>&1 | tee -a "$LOG_DIR/mlb_daily_$TODAY.log" || true
+
+# Step 6: Weekly retrain check
+log "Step 6: Weekly retrain check..."
+python3 "$PROJECT_DIR/retrain_if_needed.py" \
+    2>&1 | tee -a "$LOG_DIR/mlb_daily_$TODAY.log" || true
+
 log "=== Pipeline complete: $TODAY ==="
