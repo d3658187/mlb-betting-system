@@ -27,7 +27,7 @@ import json
 import logging
 import os
 from dataclasses import asdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -78,7 +78,9 @@ def _parse_commence_time(iso_ts: Optional[str]) -> (Optional[str], Optional[str]
     try:
         dt = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
         dt_et = dt.astimezone(ZoneInfo("US/Eastern"))
-        return dt_et.date().isoformat(), dt_et.strftime("%H:%M")
+        # DB stores game_date in Asia/Taipei timezone, so add 1 day to US/Eastern date
+        game_date = (dt_et.date() + timedelta(days=1)).isoformat()
+        return game_date, dt_et.strftime("%H:%M")
     except Exception:
         return iso_ts.split("T")[0], None
 
