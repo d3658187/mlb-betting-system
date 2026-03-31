@@ -157,7 +157,7 @@ def load_pitching(engine, since_date: date, target_date: date) -> pd.DataFrame:
     sql = text(
         """
         SELECT g.game_date,
-               p.game_id,
+               g.mlb_game_id AS game_id,
                p.pitcher_mlb_id,
                p.team_mlb_id,
                p.innings_pitched,
@@ -218,11 +218,12 @@ def load_starting_pitchers(engine, since_date: date, target_date: date) -> pd.Da
         """
         SELECT g.game_date,
                s.game_id,
-               s.team_mlb_id,
+               t.mlb_team_id AS team_mlb_id,
                s.is_home,
-               s.pitcher_mlb_id
+               s.pitcher_id AS pitcher_mlb_id
           FROM starting_pitchers s
           JOIN games g ON g.mlb_game_id = s.game_id
+          JOIN teams t ON s.team_id = t.id
          WHERE g.game_date >= :since_date
            AND g.game_date <= :target_date
         """
@@ -473,8 +474,10 @@ def _apply_platoon_splits_features(features: pd.DataFrame, platoon_df: pd.DataFr
     missing = False
     if "home_pitcher_mlb_id" in features.columns:
         for col in avail_cols:
-            features[f"home_{col}"] = features["home_pitcher_mlb_id"].map(
-                lambda pid, c=col: pmap.get(pid, {}).get(c)
+            features[f"home_{col}"] = pd.to_numeric(
+                features["home_pitcher_mlb_id"].map(
+                    lambda pid, c=col: pmap.get(pid, {}).get(c)
+                ), errors="coerce"
             )
         if "home_platoon_ba_diff" in features.columns:
             missing_home = (
@@ -486,8 +489,10 @@ def _apply_platoon_splits_features(features: pd.DataFrame, platoon_df: pd.DataFr
 
     if "away_pitcher_mlb_id" in features.columns:
         for col in avail_cols:
-            features[f"away_{col}"] = features["away_pitcher_mlb_id"].map(
-                lambda pid, c=col: pmap.get(pid, {}).get(c)
+            features[f"away_{col}"] = pd.to_numeric(
+                features["away_pitcher_mlb_id"].map(
+                    lambda pid, c=col: pmap.get(pid, {}).get(c)
+                ), errors="coerce"
             )
         if "away_platoon_ba_diff" in features.columns:
             missing_away = (
@@ -515,10 +520,10 @@ def attach_fangraphs_features(features: pd.DataFrame, engine, season: int) -> pd
 
     if not fg_teams.empty:
         features, missing = _apply_fangraphs_team_features(features, fg_teams, engine)
-        if missing and not triggered:
-            _run_fangraphs_crawler(season, mode="teams")
-            fg_teams = load_fangraphs_team_batting(engine, season)
-            features, _ = _apply_fangraphs_team_features(features, fg_teams, engine)
+        # if missing and not triggered:
+        #     _run_fangraphs_crawler(season, mode="teams")
+        #     fg_teams = load_fangraphs_team_batting(engine, season)
+        #     features, _ = _apply_fangraphs_team_features(features, fg_teams, engine)
 
     # Pitchers (FIP/xFIP)
     triggered = False
@@ -533,10 +538,10 @@ def attach_fangraphs_features(features: pd.DataFrame, engine, season: int) -> pd
 
     if not fg_pitchers.empty:
         features, missing = _apply_fangraphs_pitcher_features(features, fg_pitchers)
-        if missing and not triggered:
-            _run_fangraphs_crawler(season, mode="pitchers")
-            fg_pitchers = load_fangraphs_pitchers(engine, season)
-            features, _ = _apply_fangraphs_pitcher_features(features, fg_pitchers)
+        # if missing and not triggered:
+        #     _run_fangraphs_crawler(season, mode="pitchers")
+        #     fg_pitchers = load_fangraphs_pitchers(engine, season)
+        #     features, _ = _apply_fangraphs_pitcher_features(features, fg_pitchers)
 
     return features
 
@@ -757,11 +762,11 @@ def build_starter_rolling_features(starters_df: pd.DataFrame, pitching_df: pd.Da
     ).replace(0, pd.NA)
 
     for window in (5, 10):
-        k_roll = group["strikeouts"].rolling(window=window, min_periods=1).sum().shift(1)
-        ip_roll = group["innings_pitched"].rolling(window=window, min_periods=1).sum().shift(1)
-        er_roll = group["earned_runs"].rolling(window=window, min_periods=1).sum().shift(1)
-        whip_roll = group["whip"].rolling(window=window, min_periods=1).mean().shift(1)
-        k_rate_roll = group["k_rate"].rolling(window=window, min_periods=1).mean().shift(1)
+        k_roll = group["strikeouts"].rolling(window=window, min_periods=1).sum().shift(1).reset_index(level=0, drop=True)
+        ip_roll = group["innings_pitched"].rolling(window=window, min_periods=1).sum().shift(1).reset_index(level=0, drop=True)
+        er_roll = group["earned_runs"].rolling(window=window, min_periods=1).sum().shift(1).reset_index(level=0, drop=True)
+        whip_roll = group["whip"].rolling(window=window, min_periods=1).mean().shift(1).reset_index(level=0, drop=True)
+        k_rate_roll = group["k_rate"].rolling(window=window, min_periods=1).mean().shift(1).reset_index(level=0, drop=True)
 
         starter_game[f"starter_era_last{window}"] = 9.0 * er_roll / ip_roll.replace(0, pd.NA)
         starter_game[f"starter_whip_last{window}"] = whip_roll
@@ -928,7 +933,7 @@ def build_home_away_win_pct_diff(engine, target_date: date) -> Dict:
         """
         SELECT g.game_date, g.home_team_id, g.away_team_id, r.home_win
           FROM games g
-          JOIN game_results r ON g.mlb_game_id = r.game_id
+          JOIN game_results r ON g.id = r.game_id
          WHERE g.game_date < :target_date
         """
     )
@@ -971,7 +976,7 @@ def build_features(
     ewm_spans: Sequence[int] = (5, 15, 30),
 ) -> pd.DataFrame:
     engine = get_engine()
-    since_date = target_date - timedelta(days=200)
+    since_date = target_date - timedelta(days=400)
 
     games = load_games(engine, target_date)
     batting = load_batting(engine, since_date, target_date)
@@ -1471,10 +1476,20 @@ def _get_table_columns(engine, table_name: str) -> List[str]:
     return rows["column_name"].tolist()
 
 
-def write_features_to_db(engine, df: pd.DataFrame, table_name: str = "model_features"):
+def write_features_to_db(engine, df: pd.DataFrame, table_name: str = "model_features", preserve_existing: bool = False):
     if df.empty:
         logging.warning("No features to write.")
         return
+    
+    if not preserve_existing:
+        target_date = df['game_date'].min()
+        with engine.begin() as conn:
+            conn.execute(
+                text(f"DELETE FROM {table_name} WHERE game_date = :target_date"),
+                {"target_date": target_date},
+            )
+            logging.info("Deleted existing features for %s", target_date)
+
     table_cols = _get_table_columns(engine, table_name)
     if table_cols:
         df = df[[c for c in df.columns if c in table_cols]]
@@ -1551,9 +1566,13 @@ def load_pybaseball_games(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame
         if path.exists():
             schedule_paths.append(path)
     if not schedule_paths:
-        merged = Path(data_dir) / "starting_pitchers_2023_2025.csv"
-        if merged.exists():
-            schedule_paths.append(merged)
+        for merged in [
+            Path(data_dir) / "starting_pitchers_2023_2026.csv",
+            Path(data_dir) / "starting_pitchers_2023_2025.csv",
+        ]:
+            if merged.exists():
+                schedule_paths.append(merged)
+                break
     if not schedule_paths:
         raise FileNotFoundError(f"No starting_pitchers CSV found in {data_dir}")
 
@@ -1577,9 +1596,13 @@ def load_pybaseball_games(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame
         if path.exists():
             result_paths.append(path)
     if not result_paths:
-        merged = Path(data_dir) / "games_2023_2025.csv"
-        if merged.exists():
-            result_paths.append(merged)
+        for merged in [
+            Path(data_dir) / "games_2023_2026.csv",
+            Path(data_dir) / "games_2023_2025.csv",
+        ]:
+            if merged.exists():
+                result_paths.append(merged)
+                break
 
     if result_paths:
         result_frames = [pd.read_csv(p) for p in result_paths]
@@ -1618,9 +1641,13 @@ def load_pybaseball_team_stats(data_dir: str, seasons: Sequence[int], kind: str)
         if path.exists():
             paths.append(path)
     if not paths:
-        merged = Path(data_dir) / f"team_{kind}_2023_2025.csv"
-        if merged.exists():
-            paths.append(merged)
+        for merged in [
+            Path(data_dir) / f"team_{kind}_2023_2026.csv",
+            Path(data_dir) / f"team_{kind}_2023_2025.csv",
+        ]:
+            if merged.exists():
+                paths.append(merged)
+                break
     if not paths:
         return pd.DataFrame()
     frames = [pd.read_csv(p) for p in paths]
@@ -1641,9 +1668,13 @@ def load_pybaseball_pitcher_stats(data_dir: str, seasons: Sequence[int]) -> pd.D
         if path.exists():
             paths.append(path)
     if not paths:
-        merged = Path(data_dir) / "pitcher_stats_2023_2025.csv"
-        if merged.exists():
-            paths.append(merged)
+        for merged in [
+            Path(data_dir) / "pitcher_stats_2023_2026.csv",
+            Path(data_dir) / "pitcher_stats_2023_2025.csv",
+        ]:
+            if merged.exists():
+                paths.append(merged)
+                break
     if not paths:
         return pd.DataFrame()
 
@@ -1688,9 +1719,13 @@ def load_pybaseball_starting_pitchers(data_dir: str, seasons: Sequence[int]) -> 
         if path.exists():
             paths.append(path)
     if not paths:
-        merged = Path(data_dir) / "starting_pitchers_2023_2025.csv"
-        if merged.exists():
-            paths.append(merged)
+        for merged in [
+            Path(data_dir) / "starting_pitchers_2023_2026.csv",
+            Path(data_dir) / "starting_pitchers_2023_2025.csv",
+        ]:
+            if merged.exists():
+                paths.append(merged)
+                break
     if not paths:
         return pd.DataFrame()
 
@@ -2007,6 +2042,7 @@ def parse_args():
     p.add_argument("--ewm-spans", type=str, help="Comma-separated EWMA spans (default: 5,15,30)")
     p.add_argument("--out", help="Optional CSV output path")
     p.add_argument("--write-db", action="store_true", help="Write features to model_features table")
+    p.add_argument("--preserve-existing", action="store_true", help="Do not delete existing features for the target date")
     p.add_argument("--historical", action="store_true", help="Build historical features from pybaseball CSV")
     p.add_argument("--data-dir", default="./data/pybaseball", help="pybaseball CSV directory")
     p.add_argument("--seasons", default="2023-2025", help="Season range for historical features")
@@ -2048,7 +2084,7 @@ def main():
 
     if args.write_db:
         engine = get_engine()
-        write_features_to_db(engine, df)
+        write_features_to_db(engine, df, preserve_existing=args.preserve_existing)
 
 
 if __name__ == "__main__":
