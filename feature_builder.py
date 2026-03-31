@@ -1558,8 +1558,167 @@ def _attach_db_results(games: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
+_TEAM_ABBR_NORMALIZE = {
+    "AZ": "ARI",
+    "KC": "KCR",
+    "SD": "SDP",
+    "SF": "SFG",
+    "TB": "TBR",
+    "WSH": "WSN",
+    "WAS": "WSN",
+    "CWS": "CHW",
+}
+
+
+_FULLNAME_TO_ABBR = {
+    "Arizona Diamondbacks": "ARI",
+    "Atlanta Braves": "ATL",
+    "Baltimore Orioles": "BAL",
+    "Boston Red Sox": "BOS",
+    "Chicago Cubs": "CHC",
+    "Chicago White Sox": "CHW",
+    "Cincinnati Reds": "CIN",
+    "Cleveland Guardians": "CLE",
+    "Colorado Rockies": "COL",
+    "Detroit Tigers": "DET",
+    "Houston Astros": "HOU",
+    "Kansas City Royals": "KCR",
+    "Los Angeles Angels": "LAA",
+    "Los Angeles Dodgers": "LAD",
+    "Miami Marlins": "MIA",
+    "Milwaukee Brewers": "MIL",
+    "Minnesota Twins": "MIN",
+    "New York Mets": "NYM",
+    "New York Yankees": "NYY",
+    "Athletics": "ATH",
+    "Oakland Athletics": "ATH",
+    "Philadelphia Phillies": "PHI",
+    "Pittsburgh Pirates": "PIT",
+    "San Diego Padres": "SDP",
+    "San Francisco Giants": "SFG",
+    "Seattle Mariners": "SEA",
+    "St. Louis Cardinals": "STL",
+    "Tampa Bay Rays": "TBR",
+    "Texas Rangers": "TEX",
+    "Toronto Blue Jays": "TOR",
+    "Washington Nationals": "WSN",
+}
+
+
+def _normalize_team_abbr(raw: Optional[str]) -> Optional[str]:
+    if raw is None or pd.isna(raw):
+        return None
+    team = str(raw).strip()
+    if not team:
+        return None
+    # Full name -> abbr
+    if team in _FULLNAME_TO_ABBR:
+        return _FULLNAME_TO_ABBR[team]
+    upper = team.upper()
+    if " " not in upper and len(upper) <= 4:
+        return _TEAM_ABBR_NORMALIZE.get(upper, upper)
+    return team
+
+
+def _load_statsapi_team_map(statsapi_root: Path) -> Dict[str, str]:
+    team_map = dict(_FULLNAME_TO_ABBR)
+    if not statsapi_root.exists():
+        return team_map
+    for path in statsapi_root.rglob("teams_mlb.csv"):
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+        if df.empty:
+            continue
+        for _, row in df.iterrows():
+            name = str(row.get("name", "")).strip()
+            team_name = str(row.get("team_name", "")).strip()
+            abbr = _normalize_team_abbr(row.get("abbreviation"))
+            if abbr:
+                if name:
+                    team_map[name] = abbr
+                if team_name:
+                    team_map[team_name] = abbr
+    return team_map
+
+
+def _load_statsapi_games(statsapi_root: Path, seasons: Sequence[int]) -> pd.DataFrame:
+    if not statsapi_root.exists():
+        return pd.DataFrame()
+
+    requested = set(int(s) for s in seasons)
+    team_map = _load_statsapi_team_map(statsapi_root)
+    frames: List[pd.DataFrame] = []
+
+    for path in statsapi_root.rglob("games_*.csv"):
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+        if df.empty:
+            continue
+
+        date_col = _find_col(df.columns, ["game_date", "date"])
+        home_col = _find_col(df.columns, ["home_team", "home"])
+        away_col = _find_col(df.columns, ["away_team", "away", "visiting_team"])
+        if not date_col or not home_col or not away_col:
+            continue
+
+        frame = pd.DataFrame({
+            "game_date": pd.to_datetime(df[date_col], errors="coerce").dt.date,
+            "home_team": df[home_col],
+            "away_team": df[away_col],
+        })
+
+        if "season" in df.columns:
+            frame["season"] = pd.to_numeric(df["season"], errors="coerce")
+        else:
+            frame["season"] = pd.to_datetime(frame["game_date"], errors="coerce").dt.year
+
+        if "home_score" in df.columns:
+            frame["home_score"] = pd.to_numeric(df["home_score"], errors="coerce")
+        if "away_score" in df.columns:
+            frame["away_score"] = pd.to_numeric(df["away_score"], errors="coerce")
+        if "home_win" in df.columns:
+            frame["home_win"] = pd.to_numeric(df["home_win"], errors="coerce")
+
+        def _norm_name(val):
+            if val is None or pd.isna(val):
+                return None
+            raw = str(val).strip()
+            mapped = team_map.get(raw, raw)
+            return _normalize_team_abbr(mapped)
+
+        frame["home_team"] = frame["home_team"].apply(_norm_name)
+        frame["away_team"] = frame["away_team"].apply(_norm_name)
+
+        frame = frame.dropna(subset=["game_date", "home_team", "away_team", "season"])
+        frame["season"] = pd.to_numeric(frame["season"], errors="coerce")
+        frame = frame[frame["season"].isin(requested)]
+        if frame.empty:
+            continue
+
+        for col in ["home_score", "away_score", "home_win"]:
+            if col not in frame.columns:
+                frame[col] = pd.NA
+
+        frames.append(frame)
+
+    if not frames:
+        return pd.DataFrame()
+
+    out = pd.concat(frames, ignore_index=True)
+    out = out.sort_values(["game_date"]).drop_duplicates(
+        subset=["game_date", "home_team", "away_team", "season"], keep="last"
+    )
+    return out.reset_index(drop=True)
+
+
 def load_pybaseball_games(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame:
-    """Load schedule from starting_pitchers CSVs and attach results if available."""
+    """Load schedule/results from pybaseball CSV and backfill from MLB Stats API CSV."""
+    seasons = [int(s) for s in seasons]
+
     schedule_paths = []
     for season in seasons:
         path = Path(data_dir) / f"starting_pitchers_{season}.csv"
@@ -1573,23 +1732,34 @@ def load_pybaseball_games(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame
             if merged.exists():
                 schedule_paths.append(merged)
                 break
-    if not schedule_paths:
-        raise FileNotFoundError(f"No starting_pitchers CSV found in {data_dir}")
 
-    schedule_frames = [pd.read_csv(p) for p in schedule_paths]
-    games = pd.concat(schedule_frames, ignore_index=True)
+    if schedule_paths:
+        schedule_frames = [pd.read_csv(p) for p in schedule_paths]
+        games = pd.concat(schedule_frames, ignore_index=True)
+    else:
+        games = pd.DataFrame(columns=[
+            "game_date",
+            "home_team",
+            "away_team",
+            "home_pitcher_mlbam",
+            "away_pitcher_mlbam",
+            "season",
+        ])
+
     if "game_date" in games.columns:
-        games["game_date"] = pd.to_datetime(games["game_date"]).dt.date
+        games["game_date"] = pd.to_datetime(games["game_date"], errors="coerce").dt.date
     for col in ["home_team", "away_team"]:
         if col in games.columns:
-            games[col] = games[col].astype(str)
+            games[col] = games[col].apply(_normalize_team_abbr)
     for col in ["home_pitcher_mlbam", "away_pitcher_mlbam"]:
         if col in games.columns:
             games[col] = pd.to_numeric(games[col], errors="coerce")
     if "season" in games.columns:
         games["season"] = pd.to_numeric(games.get("season"), errors="coerce")
+    if "season" not in games.columns or games["season"].isna().all():
+        games["season"] = pd.to_datetime(games["game_date"], errors="coerce").dt.year
 
-    # Attach results (home/away score + win) from games CSVs when present
+    # Attach results (home/away score + win) from pybaseball games CSVs when present
     result_paths = []
     for season in seasons:
         path = Path(data_dir) / f"games_{season}.csv"
@@ -1608,30 +1778,74 @@ def load_pybaseball_games(data_dir: str, seasons: Sequence[int]) -> pd.DataFrame
         result_frames = [pd.read_csv(p) for p in result_paths]
         results = pd.concat(result_frames, ignore_index=True)
         if "game_date" in results.columns:
-            results["game_date"] = pd.to_datetime(results["game_date"]).dt.date
+            results["game_date"] = pd.to_datetime(results["game_date"], errors="coerce").dt.date
         for col in ["home_team", "away_team"]:
             if col in results.columns:
-                results[col] = results[col].astype(str)
+                results[col] = results[col].apply(_normalize_team_abbr)
         if "season" in results.columns:
             results["season"] = pd.to_numeric(results.get("season"), errors="coerce")
+        else:
+            results["season"] = pd.to_datetime(results["game_date"], errors="coerce").dt.year
 
-        join_keys = ["game_date", "home_team", "away_team"]
-        if "season" in games.columns and "season" in results.columns:
-            join_keys.append("season")
+        join_keys = ["game_date", "home_team", "away_team", "season"]
         result_cols = [c for c in ["home_score", "away_score", "home_win"] if c in results.columns]
-        if result_cols:
+        if result_cols and not games.empty:
             results = results[join_keys + result_cols].drop_duplicates()
             games = games.merge(results, how="left", on=join_keys)
+
+    for col in ["home_score", "away_score", "home_win"]:
+        if col not in games.columns:
+            games[col] = pd.NA
+
+    # Backfill / append from MLB Stats API CSVs (supports 2026 when pybaseball starters unavailable)
+    statsapi_root = Path(data_dir).resolve().parent / "mlb_stats_api"
+    statsapi_games = _load_statsapi_games(statsapi_root, seasons)
+    if not statsapi_games.empty:
+        key_cols = ["game_date", "home_team", "away_team", "season"]
+        result_cols = ["home_score", "away_score", "home_win"]
+
+        if games.empty:
+            games = statsapi_games.copy()
+            games["home_pitcher_mlbam"] = pd.NA
+            games["away_pitcher_mlbam"] = pd.NA
+        else:
+            # fill missing scores/win from statsapi
+            stats_fill = statsapi_games[key_cols + result_cols].drop_duplicates()
+            games = games.merge(stats_fill, how="left", on=key_cols, suffixes=("", "_statsapi"))
+            for col in result_cols:
+                stat_col = f"{col}_statsapi"
+                if stat_col in games.columns:
+                    games[col] = pd.to_numeric(games[col], errors="coerce").combine_first(
+                        pd.to_numeric(games[stat_col], errors="coerce")
+                    )
+                    games = games.drop(columns=[stat_col])
+
+            existing_keys = games[key_cols].drop_duplicates()
+            extras = statsapi_games.merge(existing_keys, how="left", on=key_cols, indicator=True)
+            extras = extras[extras["_merge"] == "left_only"].drop(columns=["_merge"])
+            if not extras.empty:
+                extras["home_pitcher_mlbam"] = pd.NA
+                extras["away_pitcher_mlbam"] = pd.NA
+                extras = extras.reindex(columns=games.columns, fill_value=pd.NA)
+                games = pd.concat([games, extras], ignore_index=True)
 
     # Ensure label columns exist (may be NA if no results available)
     for col in ["home_score", "away_score", "home_win"]:
         if col not in games.columns:
             games[col] = pd.NA
 
+    games = games.dropna(subset=["game_date", "home_team", "away_team"]).copy()
+    games["season"] = pd.to_numeric(games.get("season"), errors="coerce")
+    if games["season"].isna().any():
+        games.loc[games["season"].isna(), "season"] = pd.to_datetime(games.loc[games["season"].isna(), "game_date"]).dt.year
+
     # DB fallback for missing results (if DATABASE_URL available)
     games = _attach_db_results(games)
 
-    return games
+    games = games.sort_values(["game_date", "home_team", "away_team"]).drop_duplicates(
+        subset=["game_date", "home_team", "away_team", "season"], keep="last"
+    )
+    return games.reset_index(drop=True)
 
 
 def load_pybaseball_team_stats(data_dir: str, seasons: Sequence[int], kind: str) -> pd.DataFrame:
@@ -2024,6 +2238,19 @@ def build_historical_features_from_csv(
     return games
 
 
+def build_daily_features_from_csv(
+    target_date: date,
+    data_dir: str,
+    seasons: Sequence[int],
+    windows: Sequence[int] = (3, 5, 10, 20, 30),
+) -> pd.DataFrame:
+    hist = build_historical_features_from_csv(data_dir=data_dir, seasons=seasons, windows=windows)
+    if hist.empty:
+        return hist
+    out = hist[hist["game_date"] == target_date].copy()
+    return out.reset_index(drop=True)
+
+
 # ---------------------
 # CLI
 # ---------------------
@@ -2044,6 +2271,7 @@ def parse_args():
     p.add_argument("--write-db", action="store_true", help="Write features to model_features table")
     p.add_argument("--preserve-existing", action="store_true", help="Do not delete existing features for the target date")
     p.add_argument("--historical", action="store_true", help="Build historical features from pybaseball CSV")
+    p.add_argument("--historical-date", type=str, help="With --historical, output only one date (YYYY-MM-DD)")
     p.add_argument("--data-dir", default="./data/pybaseball", help="pybaseball CSV directory")
     p.add_argument("--seasons", default="2023-2025", help="Season range for historical features")
     return p.parse_args()
@@ -2063,13 +2291,28 @@ def main():
             seasons = list(range(start_year, end_year + 1))
         except ValueError:
             seasons = [int(x.strip()) for x in args.seasons.split(",") if x.strip()]
-        df = build_historical_features_from_csv(args.data_dir, seasons, windows=windows)
-        logging.info("Built %d historical feature rows", len(df))
+
+        if args.historical_date:
+            target_date = date.fromisoformat(args.historical_date)
+            df = build_daily_features_from_csv(
+                target_date=target_date,
+                data_dir=args.data_dir,
+                seasons=seasons,
+                windows=windows,
+            )
+            logging.info("Built %d historical feature rows for %s", len(df), target_date)
+        else:
+            df = build_historical_features_from_csv(args.data_dir, seasons, windows=windows)
+            logging.info("Built %d historical feature rows", len(df))
+
         if args.out:
             df.to_csv(args.out, index=False)
             logging.info("Saved historical features to %s", args.out)
         else:
-            default_out = Path(args.data_dir) / "historical_features.csv"
+            if args.historical_date:
+                default_out = Path(args.data_dir) / f"historical_features_{args.historical_date}.csv"
+            else:
+                default_out = Path(args.data_dir) / "historical_features.csv"
             df.to_csv(default_out, index=False)
             logging.info("Saved historical features to %s", default_out)
         return
