@@ -521,14 +521,57 @@ def build_offline_feature_template(
 
     numeric_template = template_df.apply(pd.to_numeric, errors="coerce") if not template_df.empty else pd.DataFrame()
 
+    aligned_numeric = pd.DataFrame(index=games_df.index)
+    if not template_df.empty:
+        matched_idx = pd.Series(pd.NA, index=games_df.index, dtype="object")
+
+        # Priority 1: direct game_id match
+        if "game_id" in template_df.columns and "game_id" in games_df.columns:
+            tmp_map = template_df.copy()
+            tmp_map["game_id"] = tmp_map["game_id"].astype(str)
+            tmp_map = tmp_map.drop_duplicates(subset=["game_id"], keep="last")
+            idx_map = tmp_map.reset_index().set_index("game_id")["index"].to_dict()
+            matched_idx = games_df["game_id"].astype(str).map(idx_map)
+
+        # Priority 2: team-name pair match
+        if matched_idx.isna().all() and {"home_team_name", "away_team_name"}.issubset(template_df.columns) and {"home_team_name", "away_team_name"}.issubset(games_df.columns):
+            team_map = taiwan_lottery_crawler.load_team_name_map() if taiwan_lottery_crawler is not None else {}
+
+            def _norm_name(v):
+                if v is None or (isinstance(v, float) and pd.isna(v)):
+                    return ""
+                raw = str(v).strip()
+                if taiwan_lottery_crawler is not None:
+                    raw = taiwan_lottery_crawler.normalize_team_name(raw, team_map)
+                return raw.strip().lower()
+
+            tmp_keys = template_df.copy()
+            tmp_keys["home_key"] = tmp_keys["home_team_name"].apply(_norm_name)
+            tmp_keys["away_key"] = tmp_keys["away_team_name"].apply(_norm_name)
+            tmp_keys = tmp_keys.drop_duplicates(subset=["home_key", "away_key"], keep="last")
+            key_map = tmp_keys.reset_index().set_index(["home_key", "away_key"])["index"].to_dict()
+
+            game_keys = games_df.copy()
+            game_keys["home_key"] = game_keys["home_team_name"].apply(_norm_name)
+            game_keys["away_key"] = game_keys["away_team_name"].apply(_norm_name)
+            matched_idx = game_keys.apply(lambda r: key_map.get((r["home_key"], r["away_key"])), axis=1)
+
+        if matched_idx.notna().any():
+            matched_idx_num = pd.to_numeric(matched_idx, errors="coerce")
+            aligned_numeric = numeric_template.reindex(matched_idx_num.values).reset_index(drop=True)
+
     features = pd.DataFrame(index=games_df.index)
     for col in feature_cols:
+        values = pd.Series(np.nan, index=games_df.index, dtype=float)
+        if not aligned_numeric.empty and col in aligned_numeric.columns:
+            values = pd.to_numeric(aligned_numeric[col], errors="coerce")
+
         if not numeric_template.empty and col in numeric_template.columns:
             median_val = numeric_template[col].median(skipna=True)
             if pd.notna(median_val):
-                features[col] = float(median_val)
-                continue
-        features[col] = 0.0
+                values = values.fillna(float(median_val))
+
+        features[col] = values.fillna(0.0)
 
     features["game_id"] = games_df["game_id"].astype(str).values
     if "game_date" in games_df.columns:

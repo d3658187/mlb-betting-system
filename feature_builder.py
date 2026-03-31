@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import sqlite3
 import subprocess
 import sys
 from datetime import date, datetime, timedelta
@@ -46,6 +47,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(
 
 def get_engine():
     db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        env_path = Path(__file__).resolve().parent / ".env"
+        if env_path.exists():
+            for raw in env_path.read_text().splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                if key.strip() == "DATABASE_URL":
+                    db_url = val.strip().strip('"').strip("'")
+                    break
+
     if not db_url:
         raise RuntimeError("DATABASE_URL is required")
     return create_engine(db_url, pool_pre_ping=True)
@@ -99,10 +112,348 @@ def _resolve_runs(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
 
 def load_team_abbrev_map(engine) -> pd.DataFrame:
     try:
-        df = pd.read_sql("SELECT mlb_team_id, abbreviation FROM teams", engine)
+        df = pd.read_sql("SELECT mlb_team_id, name, abbreviation FROM teams", engine)
     except Exception:
         return pd.DataFrame(columns=["mlb_team_id", "abbreviation"])
-    return df.dropna(subset=["mlb_team_id", "abbreviation"])
+
+    if "abbreviation" not in df.columns:
+        df["abbreviation"] = pd.NA
+
+    df["abbreviation"] = df["abbreviation"].astype(str).str.upper().str.strip()
+    df.loc[df["abbreviation"].isin({"", "N/A", "NONE", "NULL"}), "abbreviation"] = pd.NA
+
+    if "name" in df.columns:
+        df["name"] = df["name"].astype(str).str.strip()
+        mapped = df["name"].map(globals().get("_FULLNAME_TO_ABBR", {}))
+        df["abbreviation"] = df["abbreviation"].combine_first(mapped)
+
+    return df[["mlb_team_id", "abbreviation"]].dropna(subset=["mlb_team_id", "abbreviation"])
+
+
+def load_recent_team_form(engine, target_date: date, window: int = 5) -> pd.DataFrame:
+    """Latest rolling form snapshot per team before target_date."""
+    sql = text(
+        """
+        SELECT g.game_date,
+               th.mlb_team_id AS home_team_id,
+               ta.mlb_team_id AS away_team_id,
+               r.home_score,
+               r.away_score,
+               r.home_win
+          FROM games g
+          JOIN teams th ON th.id = g.home_team_id
+          JOIN teams ta ON ta.id = g.away_team_id
+          JOIN game_results r ON r.game_id = g.id
+         WHERE g.game_date < :target_date
+           AND DATE_PART('year', g.game_date) = :season_year
+         ORDER BY g.game_date
+        """
+    )
+    games = pd.read_sql(
+        sql,
+        engine,
+        params={"target_date": target_date, "season_year": target_date.year},
+    )
+    if games.empty:
+        return pd.DataFrame()
+
+    games["game_date"] = pd.to_datetime(games["game_date"], errors="coerce")
+    for col in ["home_team_id", "away_team_id", "home_score", "away_score", "home_win"]:
+        games[col] = pd.to_numeric(games[col], errors="coerce")
+
+    home = pd.DataFrame(
+        {
+            "game_date": games["game_date"],
+            "team_id": games["home_team_id"],
+            "is_home": True,
+            "runs_scored": games["home_score"],
+            "runs_allowed": games["away_score"],
+            "win": games["home_win"],
+        }
+    )
+    away = pd.DataFrame(
+        {
+            "game_date": games["game_date"],
+            "team_id": games["away_team_id"],
+            "is_home": False,
+            "runs_scored": games["away_score"],
+            "runs_allowed": games["home_score"],
+            "win": 1 - games["home_win"],
+        }
+    )
+    team_log = pd.concat([home, away], ignore_index=True)
+    team_log = team_log.dropna(subset=["team_id", "game_date"])
+    if team_log.empty:
+        return pd.DataFrame()
+
+    records = []
+    for team_id, grp in team_log.groupby("team_id"):
+        grp = grp.sort_values("game_date")
+        overall = grp.tail(window)
+        split_home = grp[grp["is_home"]].tail(window)
+        split_away = grp[~grp["is_home"]].tail(window)
+
+        def _stat(df: pd.DataFrame, col: str) -> float:
+            if df.empty:
+                return np.nan
+            return float(pd.to_numeric(df[col], errors="coerce").mean())
+
+        records.append(
+            {
+                "team_id": int(team_id),
+                "roll5_games_count": int(len(overall)),
+                "roll5_runs_scored_mean": _stat(overall, "runs_scored"),
+                "roll5_runs_allowed_mean": _stat(overall, "runs_allowed"),
+                "roll5_run_diff_mean": _stat(overall, "runs_scored") - _stat(overall, "runs_allowed"),
+                "roll5_win_mean": _stat(overall, "win"),
+                "home_ha_roll5_games_count": int(len(split_home)),
+                "home_ha_roll5_runs_scored_mean": _stat(split_home, "runs_scored"),
+                "home_ha_roll5_runs_allowed_mean": _stat(split_home, "runs_allowed"),
+                "home_ha_roll5_win_mean": _stat(split_home, "win"),
+                "away_ha_roll5_games_count": int(len(split_away)),
+                "away_ha_roll5_runs_scored_mean": _stat(split_away, "runs_scored"),
+                "away_ha_roll5_runs_allowed_mean": _stat(split_away, "runs_allowed"),
+                "away_ha_roll5_win_mean": _stat(split_away, "win"),
+            }
+        )
+
+    return pd.DataFrame(records)
+
+
+def load_team_season_summary_sqlite(
+    db_path: Optional[Path] = None,
+    season_year: Optional[int] = None,
+) -> pd.DataFrame:
+    path = Path(db_path) if db_path else (Path(__file__).resolve().parent / "data" / "mlb.db")
+    if not path.exists():
+        return pd.DataFrame()
+
+    query = "SELECT * FROM team_season_summary"
+    params: Tuple = tuple()
+    if season_year is not None:
+        query += " WHERE season_year = ?"
+        params = (int(season_year),)
+
+    try:
+        with sqlite3.connect(path) as conn:
+            exists = pd.read_sql_query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='team_season_summary'",
+                conn,
+            )
+            if exists.empty:
+                return pd.DataFrame()
+            summary = pd.read_sql_query(query, conn, params=params)
+    except Exception:
+        return pd.DataFrame()
+
+    if summary.empty:
+        return summary
+
+    for col in summary.columns:
+        if col in {"team_abbrev", "team_name"}:
+            continue
+        summary[col] = pd.to_numeric(summary[col], errors="coerce")
+
+    summary["team_abbrev"] = summary.get("team_abbrev", pd.Series(dtype="object")).astype(str).str.upper().str.strip()
+    return summary
+
+
+def _fill_with_proxy(
+    features: pd.DataFrame,
+    col: str,
+    proxy: pd.Series,
+    base_mask: pd.Series,
+    flag: pd.Series,
+) -> None:
+    if col not in features.columns:
+        features[col] = np.nan
+
+    current = pd.to_numeric(features[col], errors="coerce")
+    proxy_num = pd.to_numeric(proxy, errors="coerce")
+    mask = base_mask & proxy_num.notna() & (current.isna() | (current == 0))
+    if bool(mask.any()):
+        features.loc[mask, col] = proxy_num.loc[mask]
+        flag.loc[mask] = True
+
+
+def apply_prior_season_proxy_features(
+    features: pd.DataFrame,
+    engine,
+    target_date: date,
+) -> pd.DataFrame:
+    """Fill cold-start rolling/static features with prior-season team summary."""
+    if features.empty:
+        return features
+
+    prior_year = int(target_date.year) - 1
+    summary = load_team_season_summary_sqlite(season_year=prior_year)
+    if summary.empty:
+        features["home_prior_season_proxy"] = False
+        features["away_prior_season_proxy"] = False
+        features["prior_season_proxy"] = False
+        return features
+
+    team_map = load_team_abbrev_map(engine)
+    if team_map.empty:
+        features["home_prior_season_proxy"] = False
+        features["away_prior_season_proxy"] = False
+        features["prior_season_proxy"] = False
+        return features
+
+    team_map["mlb_team_id"] = pd.to_numeric(team_map["mlb_team_id"], errors="coerce")
+    team_map["abbreviation"] = team_map["abbreviation"].astype(str).str.upper().str.strip()
+    id_to_abbr = team_map.dropna(subset=["mlb_team_id", "abbreviation"]).set_index("mlb_team_id")["abbreviation"].to_dict()
+
+    idx_abbrev = summary["team_abbrev"].astype(str).str.upper().str.strip()
+    summary = summary.copy()
+    summary["team_abbrev"] = idx_abbrev
+    summary = summary.drop_duplicates(subset=["team_abbrev"], keep="last")
+
+    def _pick(*candidates: str) -> Optional[str]:
+        for c in candidates:
+            if c in summary.columns:
+                return c
+        return None
+
+    def _map(col: Optional[str], fallback: float = np.nan) -> Dict[str, float]:
+        if not col:
+            return {}
+        values = pd.to_numeric(summary[col], errors="coerce")
+        out = dict(zip(summary["team_abbrev"], values))
+        if np.isnan(fallback):
+            return out
+        return {k: (fallback if pd.isna(v) else float(v)) for k, v in out.items()}
+
+    bat_r_col = _pick("bat_r", "bat_R")
+    pit_r_col = _pick("pit_r", "pit_R")
+    pit_g_col = _pick("pit_g", "pit_G")
+    if bat_r_col and pit_g_col:
+        summary["proxy_runs_scored_pg"] = pd.to_numeric(summary[bat_r_col], errors="coerce") / pd.to_numeric(summary[pit_g_col], errors="coerce").replace(0, np.nan)
+    else:
+        summary["proxy_runs_scored_pg"] = np.nan
+    if pit_r_col and pit_g_col:
+        summary["proxy_runs_allowed_pg"] = pd.to_numeric(summary[pit_r_col], errors="coerce") / pd.to_numeric(summary[pit_g_col], errors="coerce").replace(0, np.nan)
+    else:
+        summary["proxy_runs_allowed_pg"] = np.nan
+    summary["proxy_run_diff_pg"] = summary["proxy_runs_scored_pg"] - summary["proxy_runs_allowed_pg"]
+
+    proxy_maps = {
+        "win_mean": _map(_pick("win_pct", "winpct", "win_percentage")),
+        "runs_scored_mean": _map("proxy_runs_scored_pg"),
+        "runs_allowed_mean": _map("proxy_runs_allowed_pg"),
+        "run_diff_mean": _map("proxy_run_diff_pg"),
+        "bat_AVG": _map(_pick("bat_avg", "bat_AVG")),
+        "bat_OBP": _map(_pick("bat_obp", "bat_OBP")),
+        "bat_SLG": _map(_pick("bat_slg", "bat_SLG")),
+        "bat_OPS": _map(_pick("bat_ops", "bat_OPS")),
+        "bat_ISO": _map(_pick("bat_iso", "bat_ISO")),
+        "bat_wOBA": _map(_pick("bat_woba", "bat_wOBA")),
+        "bat_wRC+": _map(_pick("bat_wrc_plus", "bat_wRC+")),
+        "bat_BB%": _map(_pick("bat_bb_pct", "bat_BB%")),
+        "bat_K%": _map(_pick("bat_k_pct", "bat_K%")),
+        "bat_R": _map(_pick("bat_r", "bat_R")),
+        "bat_HR": _map(_pick("bat_hr", "bat_HR")),
+        "bat_SB": _map(_pick("bat_sb", "bat_SB")),
+        "p_ERA": _map(_pick("pit_era", "pit_ERA")),
+        "p_WHIP": _map(_pick("pit_whip", "pit_WHIP")),
+        "p_K%": _map(_pick("pit_k_pct", "pit_K%")),
+        "p_BB%": _map(_pick("pit_bb_pct", "pit_BB%")),
+        "p_K-BB%": _map(_pick("pit_kbb_pct", "pit_K-BB%")),
+        "p_FIP": _map(_pick("pit_fip", "pit_FIP")),
+        "p_xFIP": _map(_pick("pit_xfip", "pit_xFIP")),
+        "p_SIERA": _map(_pick("pit_siera", "pit_SIERA")),
+        "p_WAR": _map(_pick("pit_war", "pit_WAR")),
+        "p_IP": _map(_pick("pit_ip", "pit_IP")),
+    }
+
+    home_flag = pd.Series(False, index=features.index)
+    away_flag = pd.Series(False, index=features.index)
+
+    for side in ["home", "away"]:
+        id_col = f"{side}_team_id"
+        if id_col not in features.columns:
+            continue
+
+        team_ids = pd.to_numeric(features[id_col], errors="coerce")
+        abbr = team_ids.map(id_to_abbr).astype(str).str.upper().str.strip()
+        overall_count_col = f"{side}_roll5_games_count"
+        ha_count_col = f"{side}_ha_roll5_games_count"
+        if overall_count_col not in features.columns:
+            features[overall_count_col] = 0
+        if ha_count_col not in features.columns:
+            features[ha_count_col] = 0
+
+        overall_cold = pd.to_numeric(features[overall_count_col], errors="coerce").fillna(0) < 5
+        ha_cold = pd.to_numeric(features[ha_count_col], errors="coerce").fillna(0) < 5
+
+        def _num_series(col_name: str) -> pd.Series:
+            if col_name in features.columns:
+                return pd.to_numeric(features[col_name], errors="coerce")
+            return pd.Series(np.nan, index=features.index, dtype=float)
+
+        overall_win_zero = _num_series(f"{side}_roll5_win_mean").fillna(0) == 0
+        ha_win_zero = _num_series(f"{side}_ha_roll5_win_mean").fillna(0) == 0
+
+        overall_proxy_mask = overall_cold | overall_win_zero
+        ha_proxy_mask = ha_cold | ha_win_zero
+
+        static_missing = _num_series(f"{side}_bat_OPS").isna() | _num_series(f"{side}_p_ERA").isna()
+        static_proxy_mask = overall_proxy_mask | ha_proxy_mask | static_missing
+        side_flag = home_flag if side == "home" else away_flag
+
+        _fill_with_proxy(features, f"{side}_roll5_win_mean", abbr.map(proxy_maps["win_mean"]), overall_proxy_mask, side_flag)
+        _fill_with_proxy(features, f"{side}_roll5_runs_scored_mean", abbr.map(proxy_maps["runs_scored_mean"]), overall_proxy_mask, side_flag)
+        _fill_with_proxy(features, f"{side}_roll5_runs_allowed_mean", abbr.map(proxy_maps["runs_allowed_mean"]), overall_proxy_mask, side_flag)
+        _fill_with_proxy(features, f"{side}_roll5_run_diff_mean", abbr.map(proxy_maps["run_diff_mean"]), overall_proxy_mask, side_flag)
+
+        _fill_with_proxy(features, f"{side}_ha_roll5_win_mean", abbr.map(proxy_maps["win_mean"]), ha_proxy_mask, side_flag)
+        _fill_with_proxy(features, f"{side}_ha_roll5_runs_scored_mean", abbr.map(proxy_maps["runs_scored_mean"]), ha_proxy_mask, side_flag)
+        _fill_with_proxy(features, f"{side}_ha_roll5_runs_allowed_mean", abbr.map(proxy_maps["runs_allowed_mean"]), ha_proxy_mask, side_flag)
+
+        # Backfill current DB rolling aliases when they are zero.
+        _fill_with_proxy(features, f"{side}_roll5_runs", abbr.map(proxy_maps["runs_scored_mean"]), overall_proxy_mask, side_flag)
+        _fill_with_proxy(features, f"{side}_pitch_roll5_runs_allowed", abbr.map(proxy_maps["runs_allowed_mean"]), overall_proxy_mask, side_flag)
+        _fill_with_proxy(features, f"{side}_pitch_roll5_era", abbr.map(proxy_maps["p_ERA"]), overall_proxy_mask, side_flag)
+        _fill_with_proxy(features, f"{side}_roll5_ops", abbr.map(proxy_maps["bat_OPS"]), overall_proxy_mask, side_flag)
+
+        for metric in [
+            "bat_AVG",
+            "bat_OBP",
+            "bat_SLG",
+            "bat_OPS",
+            "bat_ISO",
+            "bat_wOBA",
+            "bat_wRC+",
+            "bat_BB%",
+            "bat_K%",
+            "bat_R",
+            "bat_HR",
+            "bat_SB",
+            "p_ERA",
+            "p_WHIP",
+            "p_K%",
+            "p_BB%",
+            "p_K-BB%",
+            "p_FIP",
+            "p_xFIP",
+            "p_SIERA",
+            "p_WAR",
+            "p_IP",
+        ]:
+            _fill_with_proxy(features, f"{side}_{metric}", abbr.map(proxy_maps[metric]), static_proxy_mask, side_flag)
+
+    features["home_prior_season_proxy"] = home_flag
+    features["away_prior_season_proxy"] = away_flag
+    features["prior_season_proxy"] = home_flag | away_flag
+
+    for base in ["p_ERA", "p_WHIP", "p_K-BB%", "bat_wOBA", "bat_wRC+", "bat_OPS"]:
+        home_col = f"home_{base}"
+        away_col = f"away_{base}"
+        diff_col = f"diff_{base}"
+        if home_col in features.columns and away_col in features.columns:
+            features[diff_col] = pd.to_numeric(features[home_col], errors="coerce") - pd.to_numeric(features[away_col], errors="coerce")
+
+    return features
 
 
 # ---------------------
@@ -118,6 +469,8 @@ def load_games(engine, target_date: date) -> pd.DataFrame:
                g.game_datetime,
                th.mlb_team_id AS home_team_id,
                ta.mlb_team_id AS away_team_id,
+               th.name AS home_team_name,
+               ta.name AS away_team_name,
                g.status
           FROM games g
           JOIN teams th ON th.id = g.home_team_id
@@ -1170,6 +1523,41 @@ def build_features(
     features["home_win_pct_diff"] = features["home_team_id"].map(win_pct_diff)
     features["away_win_pct_diff"] = features["away_team_id"].map(win_pct_diff)
 
+    try:
+        recent_form = load_recent_team_form(engine, target_date, window=5)
+        if not recent_form.empty:
+            recent_form["team_id"] = pd.to_numeric(recent_form["team_id"], errors="coerce")
+
+            home_map = recent_form.set_index("team_id")
+            features["home_roll5_games_count"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["roll5_games_count"])
+            features["home_roll5_runs_scored_mean"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["roll5_runs_scored_mean"])
+            features["home_roll5_runs_allowed_mean"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["roll5_runs_allowed_mean"])
+            features["home_roll5_run_diff_mean"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["roll5_run_diff_mean"])
+            features["home_roll5_win_mean"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["roll5_win_mean"])
+            features["home_ha_roll5_games_count"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["home_ha_roll5_games_count"])
+            features["home_ha_roll5_runs_scored_mean"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["home_ha_roll5_runs_scored_mean"])
+            features["home_ha_roll5_runs_allowed_mean"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["home_ha_roll5_runs_allowed_mean"])
+            features["home_ha_roll5_win_mean"] = pd.to_numeric(features["home_team_id"], errors="coerce").map(home_map["home_ha_roll5_win_mean"])
+
+            away_map = recent_form.set_index("team_id")
+            features["away_roll5_games_count"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["roll5_games_count"])
+            features["away_roll5_runs_scored_mean"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["roll5_runs_scored_mean"])
+            features["away_roll5_runs_allowed_mean"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["roll5_runs_allowed_mean"])
+            features["away_roll5_run_diff_mean"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["roll5_run_diff_mean"])
+            features["away_roll5_win_mean"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["roll5_win_mean"])
+            features["away_ha_roll5_games_count"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["away_ha_roll5_games_count"])
+            features["away_ha_roll5_runs_scored_mean"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["away_ha_roll5_runs_scored_mean"])
+            features["away_ha_roll5_runs_allowed_mean"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["away_ha_roll5_runs_allowed_mean"])
+            features["away_ha_roll5_win_mean"] = pd.to_numeric(features["away_team_id"], errors="coerce").map(away_map["away_ha_roll5_win_mean"])
+
+            features["diff_roll5_runs_scored_mean"] = pd.to_numeric(features["home_roll5_runs_scored_mean"], errors="coerce") - pd.to_numeric(features["away_roll5_runs_scored_mean"], errors="coerce")
+            features["diff_roll5_runs_allowed_mean"] = pd.to_numeric(features["home_roll5_runs_allowed_mean"], errors="coerce") - pd.to_numeric(features["away_roll5_runs_allowed_mean"], errors="coerce")
+            features["diff_roll5_run_diff_mean"] = pd.to_numeric(features["home_roll5_run_diff_mean"], errors="coerce") - pd.to_numeric(features["away_roll5_run_diff_mean"], errors="coerce")
+            features["diff_roll5_win_mean"] = pd.to_numeric(features["home_roll5_win_mean"], errors="coerce") - pd.to_numeric(features["away_roll5_win_mean"], errors="coerce")
+            features["diff_ha_roll5_win_mean"] = pd.to_numeric(features["home_ha_roll5_win_mean"], errors="coerce") - pd.to_numeric(features["away_ha_roll5_win_mean"], errors="coerce")
+    except Exception:
+        logging.warning("recent team form feature unavailable; skipping.")
+
     season = target_date.year
 
     # Statcast batter EV/LA/Barrel% (team-level)
@@ -1366,6 +1754,11 @@ def build_features(
             target = target.where(target.notna(), features["home_win"])
         features["target"] = target
 
+    try:
+        features = apply_prior_season_proxy_features(features, engine, target_date)
+    except Exception:
+        logging.warning("prior season proxy feature unavailable; skipping.")
+
     # Ensure optional/label columns exist for schema consistency
     optional_cols = [
         "home_runs",
@@ -1377,6 +1770,9 @@ def build_features(
         "run_margin",
         "cover_spread",
         "target",
+        "home_prior_season_proxy",
+        "away_prior_season_proxy",
+        "prior_season_proxy",
         "home_fangraphs_wrc_plus",
         "away_fangraphs_wrc_plus",
         "home_fangraphs_woba",
