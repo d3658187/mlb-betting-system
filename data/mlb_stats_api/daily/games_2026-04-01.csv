@@ -1,0 +1,16 @@
+game_date,game_pk,home_team,away_team,home_team_id,away_team_id,home_score,away_score,home_win,season,home_probable_pitcher_id,home_probable_pitcher_name,away_probable_pitcher_id,away_probable_pitcher_name
+2026-04-01,824940,ATL,ATH,144,133,,,,2026,519242,Chris Sale,622663.0,Luis Severino
+2026-04-01,824860,BAL,TEX,110,140,,,,2026,669432,Trevor Rogers,,
+2026-04-01,824536,CIN,PIT,113,134,,,,2026,671096,Andrew Abbott,694973.0,Paul Skenes
+2026-04-01,823483,PHI,WSH,143,120,,,,2026,650911,Cristopher Sánchez,676917.0,Cade Cavalli
+2026-04-01,822835,TOR,COL,141,115,,,,2026,592332,Kevin Gausman,607536.0,Kyle Freeland
+2026-04-01,823889,MIA,CWS,146,145,,,,2026,645261,Sandy Alcantara,681343.0,Shane Smith
+2026-04-01,823078,STL,NYM,138,121,,,,2026,669461,Matthew Liberatore,642547.0,Freddy Peralta
+2026-04-01,823806,MIL,TB,158,139,,,,2026,694819,Jacob Misiorowski,656876.0,Drew Rasmussen
+2026-04-01,824211,HOU,BOS,117,111,,,,2026,681347,Mike Burrows,676979.0,Garrett Crochet
+2026-04-01,824698,CHC,LAA,112,108,,,,2026,571510,Matthew Boyd,579328.0,Yusei Kikuchi
+2026-04-01,825106,AZ,DET,109,116,,,,2026,668678,Zac Gallen,,
+2026-04-01,823321,SD,SF,135,137,,,,2026,601713,Nick Pivetta,605288.0,Adrian Houser
+2026-04-01,823157,SEA,NYY,136,147,,,,2026,669923,George Kirby,693645.0,Cam Schlittler
+2026-04-01,824136,KC,MIN,118,142,,,,2026,702070,Noah Cameron,657746.0,Joe Ryan
+2026-04-01,823970,LAD,CLE,119,114,,,,2026,808967,Yoshinobu Yamamoto,668909.0,Gavin Williams
