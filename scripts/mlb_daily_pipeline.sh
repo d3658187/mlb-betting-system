@@ -62,6 +62,11 @@ if [ -f "$ODDS_FILE" ]; then
         --date "$TODAY" \
         --odds-api \
         2>&1 | tee -a "$LOG_DIR/mlb_daily_$TODAY.log"
+
+    log "Step 3.1: Normalizing performance tracker..."
+    python3 "$PROJECT_DIR/update_tracker.py" \
+        --tracker "$PROJECT_DIR/data/performance_tracker.csv" \
+        2>&1 | tee -a "$LOG_DIR/mlb_daily_$TODAY.log" || true
 else
     log "  Skipping predictor (no odds data)"
 fi
