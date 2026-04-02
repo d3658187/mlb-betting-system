@@ -9,9 +9,10 @@ from typing import Dict, Tuple
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import brier_score_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +48,31 @@ ABBR_ALIAS = {
     "WSH": "WSN",
     "CWS": "CHW",
 }
+
+
+def confidence_tier(prob: float) -> str:
+    if pd.isna(prob):
+        return "LOW"
+    if prob > 0.65 or prob < 0.35:
+        return "HIGH"
+    if prob > 0.55 or prob < 0.45:
+        return "MEDIUM"
+    return "LOW"
+
+
+def summarize_confidence(y_true: pd.Series, probs: np.ndarray) -> dict:
+    eval_df = pd.DataFrame({"y": pd.to_numeric(y_true, errors="coerce").astype(int), "p": probs})
+    eval_df["tier"] = eval_df["p"].apply(confidence_tier)
+
+    out = {}
+    for tier in ["HIGH", "MEDIUM", "LOW"]:
+        sub = eval_df[eval_df["tier"] == tier]
+        out[tier] = {
+            "games": int(len(sub)),
+            "accuracy": float(((((sub["p"] >= 0.5) & (sub["y"] == 1)) | ((sub["p"] < 0.5) & (sub["y"] == 0))).mean())) if len(sub) else None,
+            "avg_prob": float(sub["p"].mean()) if len(sub) else None,
+        }
+    return out
 
 
 def _safe_num(v):
@@ -395,7 +421,7 @@ def build_v10_features(target_date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     return schedule, features_df
 
 
-def train_v10_model() -> tuple[Pipeline, float, int, int]:
+def train_v10_model(calibration_method: str = "isotonic", calibration_cv: int = 5) -> tuple[CalibratedClassifierCV, dict]:
     train_path = DATA_DIR / "training_features_v10.csv"
     df = pd.read_csv(train_path)
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
@@ -408,23 +434,41 @@ def train_v10_model() -> tuple[Pipeline, float, int, int]:
     X_test = test[V10_FEATURES].apply(pd.to_numeric, errors="coerce")
     y_test = pd.to_numeric(test["home_win"], errors="coerce").astype(int)
 
-    model = Pipeline(
+    base_lr = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
             ("lr", LogisticRegression(max_iter=1000, C=1.0)),
         ]
     )
-    model.fit(X_train, y_train)
 
-    test_prob = model.predict_proba(X_test)[:, 1]
-    auc = float(roc_auc_score(y_test, test_prob))
+    # Baseline (uncalibrated)
+    base_lr.fit(X_train, y_train)
+    raw_prob = base_lr.predict_proba(X_test)[:, 1]
+
+    # Calibrated probabilities (isotonic/sigmoid)
+    calibrated = CalibratedClassifierCV(base_lr, method=calibration_method, cv=calibration_cv)
+    calibrated.fit(X_train, y_train)
+    cal_prob = calibrated.predict_proba(X_test)[:, 1]
+
+    metrics = {
+        "n_train": int(len(train)),
+        "n_test": int(len(test)),
+        "calibration_method": calibration_method,
+        "calibration_cv": int(calibration_cv),
+        "auc_raw": float(roc_auc_score(y_test, raw_prob)),
+        "auc_calibrated": float(roc_auc_score(y_test, cal_prob)),
+        "brier_raw": float(brier_score_loss(y_test, raw_prob)),
+        "brier_calibrated": float(brier_score_loss(y_test, cal_prob)),
+        "tiers_raw": summarize_confidence(y_test, raw_prob),
+        "tiers_calibrated": summarize_confidence(y_test, cal_prob),
+    }
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, MODEL_PATH)
-    return model, auc, len(train), len(test)
+    joblib.dump(calibrated, MODEL_PATH)
+    return calibrated, metrics
 
 
-def predict_for_date(model: Pipeline, target_date: str, features_df: pd.DataFrame) -> pd.DataFrame:
+def predict_for_date(model, target_date: str, features_df: pd.DataFrame) -> pd.DataFrame:
     probs = model.predict_proba(features_df[V10_FEATURES])[:, 1]
 
     pred = features_df[
@@ -434,6 +478,7 @@ def predict_for_date(model: Pipeline, target_date: str, features_df: pd.DataFram
     pred["home_win_prob"] = probs
     pred["away_win_prob"] = 1.0 - probs
     pred["market_home_prob"] = "N/A"
+    pred["confidence_tier"] = pred["home_win_prob"].apply(confidence_tier)
 
     pred = pred[
         [
@@ -446,14 +491,17 @@ def predict_for_date(model: Pipeline, target_date: str, features_df: pd.DataFram
             "home_win_prob",
             "away_win_prob",
             "market_home_prob",
+            "confidence_tier",
         ]
     ].sort_values("game_id")
     return pred
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train v10 LR and predict one MLB slate")
+    parser = argparse.ArgumentParser(description="Train calibrated v10 LR and predict one MLB slate")
     parser.add_argument("--date", required=True, help="YYYY-MM-DD")
+    parser.add_argument("--calibration-method", choices=["isotonic", "sigmoid"], default="isotonic")
+    parser.add_argument("--calibration-cv", type=int, default=5)
     args = parser.parse_args()
 
     target_date = args.date
@@ -468,7 +516,10 @@ def main() -> None:
     features_out = DATA_DIR / f"features_{target_date}_v10.csv"
     features_df.to_csv(features_out, index=False)
 
-    model, auc, n_train, n_test = train_v10_model()
+    model, metrics = train_v10_model(
+        calibration_method=args.calibration_method,
+        calibration_cv=args.calibration_cv,
+    )
     pred = predict_for_date(model, target_date, features_df)
 
     pred_out = DATA_DIR / f"predictions_{target_date}.csv"
@@ -478,7 +529,17 @@ def main() -> None:
     print(f"Features: {features_out}")
     print(f"Model: {MODEL_PATH}")
     print(f"Predictions: {pred_out}")
-    print(f"Test AUC: {auc:.4f} (train={n_train}, test={n_test})")
+    print(
+        "Test AUC raw/calibrated: "
+        f"{metrics['auc_raw']:.4f} / {metrics['auc_calibrated']:.4f} "
+        f"(train={metrics['n_train']}, test={metrics['n_test']})"
+    )
+    print(
+        "Brier raw/calibrated: "
+        f"{metrics['brier_raw']:.4f} / {metrics['brier_calibrated']:.4f} "
+        f"[{metrics['calibration_method']}, cv={metrics['calibration_cv']}]"
+    )
+    print("Tier accuracy (calibrated):", metrics["tiers_calibrated"])
 
 
 if __name__ == "__main__":

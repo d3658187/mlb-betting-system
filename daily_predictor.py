@@ -165,6 +165,20 @@ def confidence_from_edge(edge: float) -> float:
     return 65.0 + 10.0 * math.tanh(edge * 5.0)
 
 
+def confidence_tier(prob: float) -> str:
+    """Tiered confidence based on win probability distance from coin flip."""
+    try:
+        p = float(prob)
+    except Exception:
+        return "LOW"
+
+    if p > 0.65 or p < 0.35:
+        return "HIGH"
+    if p > 0.55 or p < 0.45:
+        return "MEDIUM"
+    return "LOW"
+
+
 def normal_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
@@ -692,6 +706,7 @@ def run_offline_prediction_mode(
         games_out["home_team_name"],
         games_out["away_team_name"],
     )
+    games_out["confidence_tier"] = games_out["home_win_prob"].apply(confidence_tier)
     games_out["model_source"] = model_source
     games_out["prediction_date"] = target_date.isoformat()
 
@@ -706,6 +721,7 @@ def run_offline_prediction_mode(
         "home_price",
         "away_price",
         "predicted_winner",
+        "confidence_tier",
         "model_source",
     ]
     predictions = games_out[out_cols].rename(
@@ -1545,6 +1561,7 @@ def build_market_rows(
             "Edge": edge,
             "EV": ev,
             "信心指數": conf,
+            "confidence_tier": confidence_tier(prob) if pd.notna(prob) else "LOW",
             "隊伍": team_label,
         })
 
