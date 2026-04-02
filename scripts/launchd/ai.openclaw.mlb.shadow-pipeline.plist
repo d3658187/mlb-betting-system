@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.openclaw.mlb.shadow-pipeline</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/duste/.openclaw/workspace-zongzhihui/mlb_betting_system/scripts/mlb_shadow_pipeline.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/duste/.openclaw/workspace-zongzhihui/mlb_betting_system</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>10</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/duste/.openclaw/workspace-zongzhihui/mlb_betting_system/logs/shadow_pipeline.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/duste/.openclaw/workspace-zongzhihui/mlb_betting_system/logs/shadow_pipeline.launchd.err.log</string>
+</dict>
+</plist>

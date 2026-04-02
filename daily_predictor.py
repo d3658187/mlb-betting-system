@@ -48,15 +48,32 @@ PERFORMANCE_TRACKER_COLUMNS = [
     "game_id",
     "home_team",
     "away_team",
-    "pythagorean_prob",
     "ml_model_prob",
     "market_prob",
     "actual_outcome",
-    "correct_pythagorean",
     "correct_ml",
 ]
 
 OFFLINE_BASE_RATE = 0.410674
+V10_MODEL_NAME = "mlb_v10_lr"
+V10_FEATURES = [
+    "diff_p_xFIP",
+    "diff_p_K-BB%",
+    "diff_bat_wRC+",
+    "diff_p_ERA",
+    "diff_p_WHIP",
+    "diff_p_FIP",
+    "diff_p_SIERA",
+    "diff_p_K%",
+    "diff_p_BB%",
+    "home_roll5_run_diff_mean",
+    "diff_roll5_run_diff_mean",
+    "home_h2h_win_pct",
+    "away_h2h_win_pct",
+    "diff_h2h_win_pct",
+    "diff_h2h_runs_scored_avg",
+    "diff_h2h_runs_allowed_avg",
+]
 
 STATIC_FALLBACK_ALIASES = {
     "home_starter_era": ["home_starter_era", "home_starter_era_last5", "home_starter_era_last10", "home_starter_era_last3"],
@@ -81,6 +98,65 @@ STATIC_FALLBACK_ALIASES = {
     "away_rest_days": ["away_rest_days"],
     "home_advantage": ["home_advantage"],
 }
+
+
+def _apply_xgb_compat_shim(model, _seen: Optional[set] = None):
+    """Recursively patch legacy XGBoost estimators loaded from pickle.
+
+    Older serialized estimators can miss attributes expected by modern
+    sklearn/xgboost wrappers (e.g. use_label_encoder), especially when nested
+    inside Voting/Stacking/Pipeline objects.
+    """
+    if model is None:
+        return
+
+    if _seen is None:
+        _seen = set()
+    model_id = id(model)
+    if model_id in _seen:
+        return
+    _seen.add(model_id)
+
+    try:
+        if hasattr(model, "get_xgb_params") or model.__class__.__name__.startswith("XGB"):
+            for attr, default in {
+                "use_label_encoder": False,
+                "gpu_id": -1,
+                "predictor": "auto",
+            }.items():
+                if not hasattr(model, attr):
+                    try:
+                        setattr(model, attr, default)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    children = []
+    for attr in ("estimators_", "estimators", "steps"):
+        if hasattr(model, attr):
+            values = getattr(model, attr)
+            if isinstance(values, (list, tuple)):
+                for item in values:
+                    if isinstance(item, tuple) and len(item) >= 2:
+                        children.append(item[1])
+                    else:
+                        children.append(item)
+
+    for attr in ("named_steps", "named_estimators", "named_estimators_"):
+        if hasattr(model, attr):
+            values = getattr(model, attr)
+            try:
+                children.extend(list(values.values()))
+            except Exception:
+                pass
+
+    for attr in ("final_estimator", "base_estimator", "estimator"):
+        if hasattr(model, attr):
+            children.append(getattr(model, attr))
+
+    for child in children:
+        _apply_xgb_compat_shim(child, _seen)
 
 
 # ---------------------
@@ -635,6 +711,7 @@ def run_offline_prediction_mode(
     feature_template_path: Optional[str],
     base_rate: float = OFFLINE_BASE_RATE,
     max_games: Optional[int] = None,
+    tracker_path: Optional[Path] = None,
 ) -> pd.DataFrame:
     if not odds_json_path.exists():
         logging.warning("Offline odds JSON not found: %s", odds_json_path)
@@ -660,14 +737,32 @@ def run_offline_prediction_mode(
     odds_df = build_odds_df_from_games(odds_games, target_date)
     odds_df = odds_df[odds_df["game_id"].isin(games_df["game_id"])].copy()
 
-    try:
-        model, feature_cols, _ = load_model_and_meta(model_dir, model_name)
-    except Exception as exc:
-        logging.warning("Failed to load model '%s' in offline mode: %s", model_name, exc)
-        model, feature_cols = None, None
-
     template_path = select_offline_features_csv(target_date, explicit_path=feature_template_path)
-    features, used_template, used_path = build_offline_feature_template(games_df, feature_cols, template_path)
+
+    model = None
+    feature_cols = None
+    features = pd.DataFrame()
+    used_template = False
+    used_path = template_path
+
+    calibrated_model_path = Path(model_dir) / f"{model_name}.joblib"
+    if model_name == V10_MODEL_NAME and calibrated_model_path.exists():
+        try:
+            model = joblib.load(calibrated_model_path)
+            header_cols = list(pd.read_csv(template_path, nrows=0).columns) if template_path and template_path.exists() else []
+            features, used_template, used_path = build_offline_feature_template(games_df, header_cols, template_path)
+        except Exception as exc:
+            logging.warning("Failed to load calibrated v10 model '%s': %s", calibrated_model_path, exc)
+            model = None
+            features = pd.DataFrame()
+
+    if model is None:
+        try:
+            model, feature_cols, _ = load_model_and_meta(model_dir, model_name)
+        except Exception as exc:
+            logging.warning("Failed to load model '%s' in offline mode: %s", model_name, exc)
+            model, feature_cols = None, None
+        features, used_template, used_path = build_offline_feature_template(games_df, feature_cols, template_path)
 
     if model is None or features.empty:
         logging.warning(
@@ -678,10 +773,21 @@ def run_offline_prediction_mode(
         model_source = "base_rate"
     else:
         try:
-            home_probs = predict_win_prob(model, features, feature_cols)
+            if model_name == V10_MODEL_NAME and hasattr(model, "predict_proba"):
+                home_probs = predict_v10_calibrated(model, features)
+                source_prefix = "calibrated_v10"
+            else:
+                home_probs = predict_win_prob(model, features, feature_cols)
+                source_prefix = "template"
+
             if home_probs.empty:
                 raise RuntimeError("empty prediction result")
-            model_source = f"template:{used_path.name}" if used_template and used_path else "template:zeros"
+            if used_template and used_path:
+                model_source = f"{source_prefix}:{used_path.name}"
+            elif used_path:
+                model_source = f"{source_prefix}:{used_path.name}"
+            else:
+                model_source = f"{source_prefix}:zeros"
         except Exception as exc:
             logging.warning("Offline prediction failed, fallback to base rate %.6f: %s", base_rate, exc)
             home_probs = pd.Series(base_rate, index=games_df.index)
@@ -734,6 +840,18 @@ def run_offline_prediction_mode(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     predictions.to_csv(output_path, index=False)
     logging.info("Offline predictions written: %s (%d games)", output_path, len(predictions))
+
+    if tracker_path is not None:
+        tracker_games = games_df.copy()
+        tracker_features = predictions[["game_id", "home_win_prob"]].copy()
+        tracker_features["game_id"] = tracker_features["game_id"].astype(str)
+        update_performance_tracker(
+            target_date=target_date,
+            games_df=tracker_games,
+            features=tracker_features,
+            odds_df=odds_df,
+            tracker_path=tracker_path,
+        )
 
     return predictions
 
@@ -917,21 +1035,7 @@ def load_model_and_meta(model_dir: str, model_name: str):
     else:
         raise FileNotFoundError(f"Model not found: {model_path_pkl} or {model_path_booster} or {model_path_json}")
 
-    # Compatibility shim for older XGBoost pickles
-    try:
-        if hasattr(model, "get_params"):
-            for attr, default in {
-                "use_label_encoder": False,
-                "gpu_id": -1,
-                "predictor": "auto",
-            }.items():
-                if not hasattr(model, attr):
-                    try:
-                        setattr(model, attr, default)
-                    except Exception:
-                        pass
-    except Exception:
-        pass
+    _apply_xgb_compat_shim(model)
     feature_cols = None
     n_samples = None
     if meta_path.exists():
@@ -964,6 +1068,62 @@ def predict_win_prob(model, features: pd.DataFrame, feature_cols: Optional[List[
         raw = model.predict(X)
         # Sigmoid the raw margin output to get probability
         probs = 1 / (1 + np.exp(-raw))
+    return pd.Series(probs, index=features.index)
+
+
+def _build_v10_feature_frame(features: pd.DataFrame) -> pd.DataFrame:
+    if features is None or features.empty:
+        return pd.DataFrame(columns=V10_FEATURES)
+
+    out = pd.DataFrame(index=features.index)
+
+    def _col(name: str) -> pd.Series:
+        if name in features.columns:
+            return pd.to_numeric(features[name], errors="coerce")
+        return pd.Series(np.nan, index=features.index, dtype=float)
+
+    out["diff_p_xFIP"] = _col("diff_p_xFIP").combine_first(_col("home_p_xFIP") - _col("away_p_xFIP"))
+    out["diff_p_K-BB%"] = _col("diff_p_K-BB%").combine_first(_col("home_p_K-BB%") - _col("away_p_K-BB%"))
+    out["diff_bat_wRC+"] = _col("diff_bat_wRC+").combine_first(_col("home_bat_wRC+") - _col("away_bat_wRC+"))
+    out["diff_p_ERA"] = _col("diff_p_ERA").combine_first(_col("home_p_ERA") - _col("away_p_ERA"))
+    out["diff_p_WHIP"] = _col("diff_p_WHIP").combine_first(_col("home_p_WHIP") - _col("away_p_WHIP"))
+    out["diff_p_FIP"] = _col("diff_p_FIP").combine_first(_col("home_p_FIP") - _col("away_p_FIP"))
+    out["diff_p_SIERA"] = _col("diff_p_SIERA").combine_first(_col("home_p_SIERA") - _col("away_p_SIERA"))
+    out["diff_p_K%"] = _col("diff_p_K%").combine_first(_col("home_p_K%") - _col("away_p_K%"))
+    out["diff_p_BB%"] = _col("diff_p_BB%").combine_first(_col("home_p_BB%") - _col("away_p_BB%"))
+
+    out["home_roll5_run_diff_mean"] = _col("home_roll5_run_diff_mean")
+    out["home_roll5_run_diff_mean"] = out["home_roll5_run_diff_mean"].combine_first(
+        _col("home_roll5_runs_scored_mean") - _col("home_roll5_runs_allowed_mean")
+    )
+
+    out["diff_roll5_run_diff_mean"] = _col("diff_roll5_run_diff_mean").combine_first(
+        _col("home_roll5_run_diff_mean") - _col("away_roll5_run_diff_mean")
+    )
+
+    out["home_h2h_win_pct"] = _col("home_h2h_win_pct").fillna(0.5)
+    out["away_h2h_win_pct"] = _col("away_h2h_win_pct").fillna(0.5)
+    out["diff_h2h_win_pct"] = _col("diff_h2h_win_pct").combine_first(
+        out["home_h2h_win_pct"] - out["away_h2h_win_pct"]
+    )
+
+    out["diff_h2h_runs_scored_avg"] = _col("diff_h2h_runs_scored_avg").combine_first(
+        _col("home_h2h_runs_scored_avg") - _col("away_h2h_runs_scored_avg")
+    ).fillna(0.0)
+    out["diff_h2h_runs_allowed_avg"] = _col("diff_h2h_runs_allowed_avg").combine_first(
+        _col("home_h2h_runs_allowed_avg") - _col("away_h2h_runs_allowed_avg")
+    ).fillna(0.0)
+
+    return out.reindex(columns=V10_FEATURES).fillna(0.0)
+
+
+def predict_v10_calibrated(model, features: pd.DataFrame) -> pd.Series:
+    if model is None or features is None or features.empty:
+        return pd.Series(dtype=float)
+    X_v10 = _build_v10_feature_frame(features)
+    if X_v10.empty:
+        return pd.Series(dtype=float)
+    probs = model.predict_proba(X_v10)[:, 1]
     return pd.Series(probs, index=features.index)
 
 
@@ -1050,6 +1210,7 @@ def apply_static_fallback(
         return base_probs, cold_mask, rolling_zero_ratio
 
     static_model = joblib.load(model_path)
+    _apply_xgb_compat_shim(static_model)
     static_feature_cols = None
     if meta_path.exists():
         try:
@@ -1152,21 +1313,12 @@ def update_performance_tracker(
     feature_probs["game_id"] = feature_probs["game_id"].astype(str)
     feature_probs = feature_probs.rename(columns={"home_win_prob": "ml_model_prob"})
 
-    pythag = build_basic_team_model_features(games_df, target_date.year)
-    if pythag.empty:
-        pythag_probs = pd.Series(np.nan, index=game_info["game_id"].values)
-    else:
-        pythag["game_id"] = pythag["game_id"].astype(str)
-        pythag_probs = pythag.set_index("game_id")["home_win_prob"]
-
     market_probs = build_moneyline_market_prob(games_df, odds_df)
 
     tracker_rows = game_info.merge(feature_probs, on="game_id", how="left")
     tracker_rows["date"] = target_date.isoformat()
-    tracker_rows["pythagorean_prob"] = tracker_rows["game_id"].map(pythag_probs)
     tracker_rows["market_prob"] = tracker_rows["game_id"].map(market_probs)
     tracker_rows["actual_outcome"] = pd.NA
-    tracker_rows["correct_pythagorean"] = pd.NA
     tracker_rows["correct_ml"] = pd.NA
 
     tracker_rows = tracker_rows.rename(
@@ -1183,8 +1335,13 @@ def update_performance_tracker(
     else:
         existing = pd.DataFrame(columns=PERFORMANCE_TRACKER_COLUMNS)
 
-    existing["date"] = existing.get("date", pd.Series(dtype="object")).astype(str)
-    existing["game_id"] = existing.get("game_id", pd.Series(dtype="object")).astype(str)
+    for col in PERFORMANCE_TRACKER_COLUMNS:
+        if col not in existing.columns:
+            existing[col] = pd.NA
+    existing = existing[PERFORMANCE_TRACKER_COLUMNS]
+
+    existing["date"] = existing["date"].astype(str)
+    existing["game_id"] = existing["game_id"].astype(str)
 
     key_mask = (existing["date"] == target_date.isoformat()) & (
         existing["game_id"].isin(tracker_rows["game_id"].astype(str))
@@ -1224,21 +1381,7 @@ def load_regression_model(model_dir: str, model_name: str):
         logging.warning(f"Regression model not found: {model_path_pkl} or {model_path_booster} or {model_path_json}")
         return None, None, None
 
-    # Compatibility shim for older XGBoost pickles
-    try:
-        if hasattr(model, "get_params"):
-            for attr, default in {
-                "use_label_encoder": False,
-                "gpu_id": -1,
-                "predictor": "auto",
-            }.items():
-                if not hasattr(model, attr):
-                    try:
-                        setattr(model, attr, default)
-                    except Exception:
-                        pass
-    except Exception:
-        pass
+    _apply_xgb_compat_shim(model)
     feature_cols = None
     metric = None
     if meta_path.exists():
@@ -1417,8 +1560,26 @@ def build_market_rows(
     odds_df = odds_df.copy()
     odds_df["game_id"] = odds_df["game_id"].astype(str)
 
+    # Canonicalize team-name columns.
+    # Newer odds/game payloads may expose home_team/away_team instead of *_team_name,
+    # and features may already include *_team_name (which would otherwise create
+    # suffixed columns during merge and break downstream column selection).
+    if "home_team_name" not in games.columns and "home_team" in games.columns:
+        games["home_team_name"] = games["home_team"]
+    if "away_team_name" not in games.columns and "away_team" in games.columns:
+        games["away_team_name"] = games["away_team"]
+
     merge_cols = ["game_id", "home_team_name", "away_team_name"]
-    df = df.merge(games[merge_cols], on="game_id", how="left")
+    if not set(merge_cols).issubset(games.columns):
+        missing = [c for c in merge_cols if c not in games.columns]
+        logging.warning("Missing game team columns for market merge: %s", missing)
+        for col in ["home_team_name", "away_team_name"]:
+            if col not in df.columns:
+                df[col] = pd.NA
+    else:
+        # Avoid duplicate *_team_name suffixes when features already contains these columns.
+        df = df.drop(columns=["home_team_name", "away_team_name"], errors="ignore")
+        df = df.merge(games[merge_cols], on="game_id", how="left")
 
     # Use model prediction for total runs if available, otherwise estimate
     if "total_runs_pred" not in df.columns:
@@ -1651,7 +1812,13 @@ def parse_args():
     p.add_argument("--date", help="YYYY-MM-DD (default: today)")
     p.add_argument("--window", type=int, default=10, help="Rolling window size")
     p.add_argument("--model-dir", default="./models", help="Directory with trained model artifacts")
-    p.add_argument("--model", default="mlb_v9_platoon", help="Name of the classification model to use (e.g., mlb_v6_model, mlb_v8_platoon, mlb_v9_platoon)")
+    p.add_argument("--model", default=V10_MODEL_NAME, help="Name of the classification model to use (default: mlb_v10_lr)")
+    p.add_argument(
+        "--use-calibrated",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use calibrated v10 LR probabilities (default: enabled).",
+    )
     p.add_argument("--out", help="Output CSV for recommendations")
     p.add_argument("--ev-threshold", type=float, default=0.0, help="Minimum EV to recommend")
     p.add_argument("--vig-rate", type=float, default=0.12, help="Taiwan lottery vig rate (10-15%%)")
@@ -1782,47 +1949,72 @@ def main():
             feature_template_path=args.offline_features_csv,
             base_rate=args.offline_base_rate,
             max_games=args.offline_max_games,
+            tracker_path=Path(args.performance_tracker),
         )
         if predictions.empty:
             logging.error("Offline mode failed: no prediction output generated")
         return
 
     # --- Load Models ---
-    # Moneyline/classification model
-    # Try to load the user-specified model, but fall back to a known good one if it fails.
-    try:
-        ml_model, ml_feature_cols, ml_n_samples = load_model_and_meta(args.model_dir, args.model)
-    except (FileNotFoundError, xgb.core.XGBoostError) as e:
-        logging.error(f"Failed to load specified model '{args.model}': {e}. Falling back to 'mlb_v6_model.pkl'.")
-        # Fallback to a known working model
-        args.model = "mlb_v6_model"
-        ml_model, ml_feature_cols, ml_n_samples = load_model_and_meta(args.model_dir, args.model)
-
-    # If model was trained on very few samples, it is unreliable - use base rate fallback
-    # League average home win rate is ~52%; use that when model can't be trusted
+    # Default path: calibrated v10 LR probabilities.
     HOME_BASE_RATE = 0.52
-    if ml_n_samples is not None and ml_n_samples < 100:
-        logging.warning(
-            "Model '%s' trained on only %d samples — too few to be reliable. "
-            "Using base rate (%.0f%% home win) as fallback.",
-            args.model, ml_n_samples, HOME_BASE_RATE * 100,
-        )
-        features["home_win_prob"] = HOME_BASE_RATE
-        features["used_static_fallback"] = False
-        features["rolling_zero_ratio"] = pd.NA
-    else:
-        base_probs = predict_win_prob(ml_model, features, ml_feature_cols)
-        fallback_probs, cold_mask, rolling_zero_ratio = apply_static_fallback(
-            features=features,
-            base_probs=base_probs,
-            model_dir=args.model_dir,
-            base_feature_cols=ml_feature_cols,
-            zero_threshold=args.cold_start_zero_threshold,
-            static_model_name=args.static_model,
-        )
-        features["home_win_prob"] = fallback_probs
-        features["used_static_fallback"] = cold_mask.astype(bool)
-        features["rolling_zero_ratio"] = rolling_zero_ratio
+    used_calibrated = False
+
+    if args.use_calibrated:
+        calibrated_path = Path(args.model_dir) / f"{args.model}.joblib"
+        if not calibrated_path.exists() and args.model == V10_MODEL_NAME:
+            calibrated_path = Path(args.model_dir) / "mlb_v10_lr.joblib"
+
+        if calibrated_path.exists():
+            try:
+                calibrated_model = joblib.load(calibrated_path)
+                calibrated_probs = predict_v10_calibrated(calibrated_model, features)
+                if calibrated_probs.empty:
+                    raise RuntimeError("calibrated prediction output is empty")
+                features["home_win_prob"] = calibrated_probs.clip(0.001, 0.999)
+                features["used_static_fallback"] = False
+                features["rolling_zero_ratio"] = pd.NA
+                used_calibrated = True
+                logging.info("Using calibrated v10 model: %s", calibrated_path)
+            except Exception as exc:
+                logging.warning("Calibrated model path failed (%s): %s", calibrated_path, exc)
+        else:
+            logging.warning("Calibrated model not found: %s", calibrated_path)
+
+    if not used_calibrated:
+        # Legacy fallback: non-calibrated model + static cold-start blend.
+        try:
+            ml_model, ml_feature_cols, ml_n_samples = load_model_and_meta(args.model_dir, args.model)
+        except (FileNotFoundError, xgb.core.XGBoostError) as e:
+            logging.error(f"Failed to load specified model '{args.model}': {e}. Falling back to 'mlb_v6_model.pkl'.")
+            args.model = "mlb_v6_model"
+            ml_model, ml_feature_cols, ml_n_samples = load_model_and_meta(args.model_dir, args.model)
+
+        if ml_n_samples is not None and ml_n_samples < 100:
+            logging.warning(
+                "Model '%s' trained on only %d samples — too few to be reliable. "
+                "Using base rate (%.0f%% home win) as fallback.",
+                args.model, ml_n_samples, HOME_BASE_RATE * 100,
+            )
+            features["home_win_prob"] = HOME_BASE_RATE
+            features["used_static_fallback"] = False
+            features["rolling_zero_ratio"] = pd.NA
+        else:
+            base_probs = predict_win_prob(ml_model, features, ml_feature_cols)
+            fallback_probs, cold_mask, rolling_zero_ratio = apply_static_fallback(
+                features=features,
+                base_probs=base_probs,
+                model_dir=args.model_dir,
+                base_feature_cols=ml_feature_cols,
+                zero_threshold=args.cold_start_zero_threshold,
+                static_model_name=args.static_model,
+            )
+            features["home_win_prob"] = fallback_probs
+            features["used_static_fallback"] = cold_mask.astype(bool)
+            features["rolling_zero_ratio"] = rolling_zero_ratio
+
+    features["home_win_prob"] = pd.to_numeric(features["home_win_prob"], errors="coerce").fillna(HOME_BASE_RATE).clip(0.001, 0.999)
+    features["confidence_tier"] = features["home_win_prob"].apply(confidence_tier)
 
     # Runline/spread model - attempt to load v8, but it will gracefully fail and return None
     runline_model, runline_cols, runline_sigma = load_regression_model(args.model_dir, "mlb_v8_runline")

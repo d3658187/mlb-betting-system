@@ -139,15 +139,61 @@ def clean_tracker_file(tracker_path: Path) -> tuple[int, int]:
     return before_count, after_count
 
 
+def build_rows_from_predictions(predictions_path: Path) -> pd.DataFrame:
+    pred = pd.read_csv(predictions_path)
+
+    game_id_col = "game_id" if "game_id" in pred.columns else None
+    date_col = "prediction_date" if "prediction_date" in pred.columns else ("date" if "date" in pred.columns else None)
+    home_col = "home_team" if "home_team" in pred.columns else "home_team_name"
+    away_col = "away_team" if "away_team" in pred.columns else "away_team_name"
+    prob_col = "home_win_prob" if "home_win_prob" in pred.columns else "ml_model_prob"
+    market_col = "market_home_prob" if "market_home_prob" in pred.columns else "market_prob"
+
+    missing = [
+        name
+        for name, col in {
+            "home_team": home_col,
+            "away_team": away_col,
+            "ml_model_prob": prob_col,
+        }.items()
+        if col is None or col not in pred.columns
+    ]
+    if missing:
+        raise ValueError(f"Prediction file missing required fields: {missing}")
+
+    rows = pd.DataFrame()
+    rows["date"] = pred[date_col].astype(str) if date_col and date_col in pred.columns else pd.NA
+    rows["game_id"] = pred[game_id_col].astype(str) if game_id_col and game_id_col in pred.columns else pd.NA
+    rows["home_team"] = pred[home_col].astype(str)
+    rows["away_team"] = pred[away_col].astype(str)
+    rows["ml_model_prob"] = pd.to_numeric(pred[prob_col], errors="coerce")
+    rows["market_prob"] = pd.to_numeric(pred[market_col], errors="coerce") if market_col in pred.columns else pd.NA
+    rows["actual_outcome"] = pd.NA
+    rows["correct_ml"] = pd.NA
+
+    return _ensure_schema(rows)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Deduplicate/normalize performance tracker")
     parser.add_argument("--tracker", default="data/performance_tracker.csv", help="Path to tracker CSV")
+    parser.add_argument("--predictions", help="Optional predictions CSV to upsert into tracker")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
     tracker_path = Path(args.tracker)
+
+    if args.predictions:
+        pred_path = Path(args.predictions)
+        new_rows = build_rows_from_predictions(pred_path)
+        if new_rows["date"].isna().all():
+            raise ValueError("Predictions CSV must include 'prediction_date' (or 'date') column")
+        updated = upsert_tracker_rows(tracker_path, new_rows)
+        logging.info("Tracker upserted from %s -> %s (%d rows total)", pred_path, tracker_path, len(updated))
+        return
+
     before_count, after_count = clean_tracker_file(tracker_path)
     logging.info("Tracker cleaned: %s | before=%d after=%d removed=%d", tracker_path, before_count, after_count, before_count - after_count)
 

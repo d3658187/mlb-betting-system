@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -93,6 +94,144 @@ def _diff(a, b):
     if pd.isna(a) or pd.isna(b):
         return np.nan
     return float(a) - float(b)
+
+
+def _col(df: pd.DataFrame, name: str) -> pd.Series:
+    if name in df.columns:
+        return pd.to_numeric(df[name], errors="coerce")
+    return pd.Series(np.nan, index=df.index, dtype=float)
+
+
+def project_to_v10_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = pd.DataFrame(index=df.index)
+    out["diff_p_xFIP"] = _col(df, "diff_p_xFIP").combine_first(_col(df, "home_p_xFIP") - _col(df, "away_p_xFIP"))
+    out["diff_p_K-BB%"] = _col(df, "diff_p_K-BB%").combine_first(_col(df, "home_p_K-BB%") - _col(df, "away_p_K-BB%"))
+    out["diff_bat_wRC+"] = _col(df, "diff_bat_wRC+").combine_first(_col(df, "home_bat_wRC+") - _col(df, "away_bat_wRC+"))
+    out["diff_p_ERA"] = _col(df, "diff_p_ERA").combine_first(_col(df, "home_p_ERA") - _col(df, "away_p_ERA"))
+    out["diff_p_WHIP"] = _col(df, "diff_p_WHIP").combine_first(_col(df, "home_p_WHIP") - _col(df, "away_p_WHIP"))
+    out["diff_p_FIP"] = _col(df, "diff_p_FIP").combine_first(_col(df, "home_p_FIP") - _col(df, "away_p_FIP"))
+    out["diff_p_SIERA"] = _col(df, "diff_p_SIERA").combine_first(_col(df, "home_p_SIERA") - _col(df, "away_p_SIERA"))
+    out["diff_p_K%"] = _col(df, "diff_p_K%").combine_first(_col(df, "home_p_K%") - _col(df, "away_p_K%"))
+    out["diff_p_BB%"] = _col(df, "diff_p_BB%").combine_first(_col(df, "home_p_BB%") - _col(df, "away_p_BB%"))
+
+    out["home_roll5_run_diff_mean"] = _col(df, "home_roll5_run_diff_mean").combine_first(
+        _col(df, "home_roll5_runs_scored_mean") - _col(df, "home_roll5_runs_allowed_mean")
+    )
+    out["diff_roll5_run_diff_mean"] = _col(df, "diff_roll5_run_diff_mean").combine_first(
+        _col(df, "home_roll5_run_diff_mean") - _col(df, "away_roll5_run_diff_mean")
+    )
+
+    out["home_h2h_win_pct"] = _col(df, "home_h2h_win_pct").fillna(0.5)
+    out["away_h2h_win_pct"] = _col(df, "away_h2h_win_pct").fillna(0.5)
+    out["diff_h2h_win_pct"] = _col(df, "diff_h2h_win_pct").combine_first(
+        out["home_h2h_win_pct"] - out["away_h2h_win_pct"]
+    )
+
+    out["diff_h2h_runs_scored_avg"] = _col(df, "diff_h2h_runs_scored_avg").combine_first(
+        _col(df, "home_h2h_runs_scored_avg") - _col(df, "away_h2h_runs_scored_avg")
+    ).fillna(0.0)
+    out["diff_h2h_runs_allowed_avg"] = _col(df, "diff_h2h_runs_allowed_avg").combine_first(
+        _col(df, "home_h2h_runs_allowed_avg") - _col(df, "away_h2h_runs_allowed_avg")
+    ).fillna(0.0)
+
+    return out.reindex(columns=V10_FEATURES).fillna(0.0)
+
+
+def load_offline_feature_inputs(path: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    src = pd.read_csv(path)
+
+    if "game_id" in src.columns:
+        game_id = src["game_id"].astype(str)
+    elif "mlb_game_id" in src.columns:
+        game_id = pd.to_numeric(src["mlb_game_id"], errors="coerce").astype("Int64").astype(str)
+    else:
+        game_id = pd.Series([str(i) for i in range(1, len(src) + 1)])
+
+    home_team = src.get("home_team")
+    if home_team is None:
+        home_team = src.get("home_team_name")
+    away_team = src.get("away_team")
+    if away_team is None:
+        away_team = src.get("away_team_name")
+
+    home_pitcher = src.get("home_pitcher")
+    if home_pitcher is None:
+        home_pitcher = src.get("home_probable_pitcher_name")
+    away_pitcher = src.get("away_pitcher")
+    if away_pitcher is None:
+        away_pitcher = src.get("away_probable_pitcher_name")
+
+    base = pd.DataFrame(
+        {
+            "game_id": game_id,
+            "home_team": pd.Series(home_team).fillna("UNKNOWN").astype(str),
+            "away_team": pd.Series(away_team).fillna("UNKNOWN").astype(str),
+            "home_pitcher": pd.Series(home_pitcher).fillna("TBD").astype(str),
+            "away_pitcher": pd.Series(away_pitcher).fillna("TBD").astype(str),
+        }
+    )
+
+    invalid_gid = base["game_id"].isin(["", "<NA>", "nan", "None"])
+    if invalid_gid.any():
+        base.loc[invalid_gid, "game_id"] = [str(i) for i in range(1, int(invalid_gid.sum()) + 1)]
+
+    v10 = project_to_v10_features(src)
+    features_df = pd.concat([base.reset_index(drop=True), v10.reset_index(drop=True)], axis=1)
+    schedule = base[["game_id", "home_team", "away_team", "home_pitcher", "away_pitcher"]].copy()
+    return schedule, features_df
+
+
+def load_market_prob_map(odds_json: Optional[str]) -> dict:
+    if not odds_json:
+        return {}
+    path = Path(odds_json)
+    if not path.exists():
+        return {}
+
+    try:
+        payload = json.loads(path.read_text())
+    except Exception:
+        return {}
+
+    if not isinstance(payload, list):
+        return {}
+
+    by_game_id = {}
+    by_matchup = {}
+
+    for game in payload:
+        home_team = str(game.get("home_team") or "").upper().strip()
+        away_team = str(game.get("away_team") or "").upper().strip()
+        home_imp = []
+        away_imp = []
+
+        for item in game.get("markets", []) or []:
+            if str(item.get("market") or "").lower() != "moneyline":
+                continue
+            price = pd.to_numeric(item.get("price"), errors="coerce")
+            if pd.isna(price):
+                continue
+            p = 100.0 / (price + 100.0) if price > 0 else abs(price) / (abs(price) + 100.0)
+            sel = str(item.get("selection") or "").lower()
+            if sel == "home":
+                home_imp.append(float(p))
+            elif sel == "away":
+                away_imp.append(float(p))
+
+        if not home_imp or not away_imp:
+            continue
+
+        h = float(np.mean(home_imp))
+        a = float(np.mean(away_imp))
+        market_prob = h / (h + a) if (h + a) > 0 else h
+
+        gid = str(game.get("game_id") or game.get("id") or "").strip()
+        if gid:
+            by_game_id[gid] = market_prob
+        if home_team and away_team:
+            by_matchup[(home_team, away_team)] = market_prob
+
+    return {"by_game_id": by_game_id, "by_matchup": by_matchup}
 
 
 def load_schedule(target_date: str) -> pd.DataFrame:
@@ -468,7 +607,7 @@ def train_v10_model(calibration_method: str = "isotonic", calibration_cv: int = 
     return calibrated, metrics
 
 
-def predict_for_date(model, target_date: str, features_df: pd.DataFrame) -> pd.DataFrame:
+def predict_for_date(model, target_date: str, features_df: pd.DataFrame, market_prob_map: Optional[dict] = None) -> pd.DataFrame:
     probs = model.predict_proba(features_df[V10_FEATURES])[:, 1]
 
     pred = features_df[
@@ -477,7 +616,18 @@ def predict_for_date(model, target_date: str, features_df: pd.DataFrame) -> pd.D
     pred["prediction_date"] = target_date
     pred["home_win_prob"] = probs
     pred["away_win_prob"] = 1.0 - probs
-    pred["market_home_prob"] = "N/A"
+
+    by_game_id = (market_prob_map or {}).get("by_game_id", {})
+    by_matchup = (market_prob_map or {}).get("by_matchup", {})
+
+    def _market_prob(row):
+        gid = str(row.get("game_id") or "").strip()
+        if gid and gid in by_game_id:
+            return by_game_id[gid]
+        key = (str(row.get("home_team") or "").upper().strip(), str(row.get("away_team") or "").upper().strip())
+        return by_matchup.get(key, np.nan)
+
+    pred["market_home_prob"] = pred.apply(_market_prob, axis=1)
     pred["confidence_tier"] = pred["home_win_prob"].apply(confidence_tier)
 
     pred = pred[
@@ -502,27 +652,38 @@ def main() -> None:
     parser.add_argument("--date", required=True, help="YYYY-MM-DD")
     parser.add_argument("--calibration-method", choices=["isotonic", "sigmoid"], default="isotonic")
     parser.add_argument("--calibration-cv", type=int, default=5)
+    parser.add_argument("--offline-odds-json", help="Optional The Odds API JSON for market_home_prob")
+    parser.add_argument("--offline-features-csv", help="Optional prebuilt features CSV (from feature_builder)")
+    parser.add_argument("--out", help="Optional output CSV path")
     args = parser.parse_args()
 
     target_date = args.date
 
-    schedule, features_df = build_v10_features(target_date)
+    if args.offline_features_csv:
+        schedule, features_df = load_offline_feature_inputs(args.offline_features_csv)
+        features_out = Path(args.offline_features_csv)
+        schedule_out = DATA_DIR / f"schedule_{target_date}.csv"
+        schedule.to_csv(schedule_out, index=False)
+    else:
+        schedule, features_df = build_v10_features(target_date)
+        schedule_out = DATA_DIR / f"schedule_{target_date}.csv"
+        schedule[
+            ["game_id", "home_team", "away_team", "home_pitcher", "away_pitcher"]
+        ].to_csv(schedule_out, index=False)
 
-    schedule_out = DATA_DIR / f"schedule_{target_date}.csv"
-    schedule[
-        ["game_id", "home_team", "away_team", "home_pitcher", "away_pitcher"]
-    ].to_csv(schedule_out, index=False)
-
-    features_out = DATA_DIR / f"features_{target_date}_v10.csv"
-    features_df.to_csv(features_out, index=False)
+        features_out = DATA_DIR / f"features_{target_date}_v10.csv"
+        features_df.to_csv(features_out, index=False)
 
     model, metrics = train_v10_model(
         calibration_method=args.calibration_method,
         calibration_cv=args.calibration_cv,
     )
-    pred = predict_for_date(model, target_date, features_df)
 
-    pred_out = DATA_DIR / f"predictions_{target_date}.csv"
+    market_prob_map = load_market_prob_map(args.offline_odds_json)
+    pred = predict_for_date(model, target_date, features_df, market_prob_map=market_prob_map)
+
+    pred_out = Path(args.out) if args.out else (DATA_DIR / f"predictions_{target_date}.csv")
+    pred_out.parent.mkdir(parents=True, exist_ok=True)
     pred.to_csv(pred_out, index=False)
 
     print(f"Schedule: {schedule_out}")

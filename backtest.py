@@ -40,6 +40,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
 import model_trainer
 
@@ -513,6 +514,104 @@ def run_walkforward_backtest(cfg: BacktestConfig) -> Tuple[pd.DataFrame, dict]:
     return report, summary
 
 
+def run_seasonal_walk_forward_report(
+    data_path: str,
+    target: str,
+    feature_cols: Optional[List[str]],
+    min_train_size: int,
+) -> pd.DataFrame:
+    df = pd.read_csv(data_path)
+    if "game_date" not in df.columns:
+        raise SystemExit("Seasonal walk-forward requires 'game_date' column")
+    if target not in df.columns:
+        raise SystemExit(f"Seasonal walk-forward requires target column '{target}'")
+
+    df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
+    df = df.dropna(subset=["game_date", target]).copy()
+    if df.empty:
+        raise SystemExit("No valid rows for seasonal walk-forward")
+
+    df[target] = pd.to_numeric(df[target], errors="coerce")
+    df = df.dropna(subset=[target]).copy()
+    df[target] = df[target].astype(int)
+    df["season"] = df["game_date"].dt.year.astype(int)
+
+    seasons = sorted(df["season"].unique())
+    if len(seasons) < 2:
+        raise SystemExit("Need at least 2 seasons for walk-forward")
+
+    rows: List[dict] = []
+    all_probs: List[np.ndarray] = []
+    all_y: List[np.ndarray] = []
+
+    for season in seasons[1:]:
+        train_df = df[df["season"] < season].copy()
+        test_df = df[df["season"] == season].copy()
+
+        if len(train_df) < min_train_size or test_df.empty:
+            continue
+
+        if feature_cols:
+            cols = [c for c in feature_cols if c in train_df.columns]
+        else:
+            cols = model_trainer.infer_feature_columns(train_df, target)
+            cols = model_trainer.drop_leakage_columns(cols)
+
+        if not cols:
+            continue
+
+        X_train = train_df[cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+        y_train = train_df[target].astype(int)
+        X_test = test_df[cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+        y_test = test_df[target].astype(int)
+
+        model = model_trainer.build_model("classification")
+        model.fit(X_train, y_train)
+        probs = np.clip(model.predict_proba(X_test)[:, 1], 1e-6, 1 - 1e-6)
+
+        preds = (probs >= 0.5).astype(int)
+
+        auc = np.nan
+        if y_test.nunique() >= 2:
+            auc = float(roc_auc_score(y_test, probs))
+
+        rows.append(
+            {
+                "season": int(season),
+                "train_games": int(len(train_df)),
+                "test_games": int(len(test_df)),
+                "accuracy": float((preds == y_test.values).mean()),
+                "brier_score": float(brier_score_loss(y_test, probs)),
+                "log_loss": float(log_loss(y_test, probs, labels=[0, 1])),
+                "auc": auc,
+            }
+        )
+
+        all_probs.append(probs)
+        all_y.append(y_test.values)
+
+    if not rows:
+        raise SystemExit("No seasonal walk-forward rows generated")
+
+    y_all = np.concatenate(all_y)
+    p_all = np.clip(np.concatenate(all_probs), 1e-6, 1 - 1e-6)
+    auc_all = float(roc_auc_score(y_all, p_all)) if len(np.unique(y_all)) >= 2 else np.nan
+
+    rows.append(
+        {
+            "season": "OVERALL",
+            "train_games": int(np.sum([r["train_games"] for r in rows])),
+            "test_games": int(len(y_all)),
+            "accuracy": float(((p_all >= 0.5).astype(int) == y_all).mean()),
+            "brier_score": float(brier_score_loss(y_all, p_all)),
+            "log_loss": float(log_loss(y_all, p_all, labels=[0, 1])),
+            "auc": auc_all,
+        }
+    )
+
+    return pd.DataFrame(rows)
+
+
 # ---------------------
 # Entry
 # ---------------------
@@ -541,6 +640,8 @@ def parse_args():
     p.add_argument("--summary", dest="out_summary", help="Output JSON path for summary")
     p.add_argument("--feature-cols", help="Comma-separated feature columns to use")
     p.add_argument("--feature-cols-file", help="JSON file containing feature columns list")
+    p.add_argument("--seasonal-walk-forward", action="store_true", help="Run season-based walk-forward (train seasons 1..N-1, test season N)")
+    p.add_argument("--walk-forward-report", default="data/results/walk_forward_report.csv", help="Seasonal walk-forward CSV output path")
     return p.parse_args()
 
 
@@ -551,6 +652,19 @@ def main():
         feature_cols = json.loads(Path(args.feature_cols_file).read_text())
     elif args.feature_cols:
         feature_cols = [c.strip() for c in args.feature_cols.split(",") if c.strip()]
+
+    if args.seasonal_walk_forward:
+        report_df = run_seasonal_walk_forward_report(
+            data_path=args.data_path,
+            target=args.target,
+            feature_cols=feature_cols,
+            min_train_size=args.min_train_size,
+        )
+        out_path = Path(args.walk_forward_report)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        report_df.to_csv(out_path, index=False)
+        logging.info("Saved seasonal walk-forward report to %s", out_path)
+        return
 
     cfg = BacktestConfig(
         data_path=args.data_path,
