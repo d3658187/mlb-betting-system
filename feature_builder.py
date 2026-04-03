@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Dict, Optional, Sequence, List, Tuple
 
 import numpy as np
+import requests
 
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -39,6 +40,9 @@ except Exception:  # pragma: no cover
     taiwan_lottery_crawler = None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+
+MLB_SCHEDULE_API_URL = "https://statsapi.mlb.com/api/v1/schedule"
+DEFAULT_SCHEDULE_TIMEZONE = os.getenv("MLB_SCHEDULE_TIMEZONE", "Asia/Taipei")
 
 
 # ---------------------
@@ -457,10 +461,97 @@ def apply_prior_season_proxy_features(
 
 
 # ---------------------
+# Schedule context (timezone-aware date mapping)
+# ---------------------
+
+def _request_schedule_json(target_date: date, schedule_tz: str) -> Dict:
+    params = {
+        "sportId": 1,
+        "date": target_date.isoformat(),
+        "timeZone": schedule_tz,
+    }
+    resp = requests.get(MLB_SCHEDULE_API_URL, params=params, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def resolve_schedule_context(target_date: date, schedule_tz: str = DEFAULT_SCHEDULE_TIMEZONE) -> Tuple[date, List[int]]:
+    """Resolve target MLB official date + game IDs for a local date/timezone.
+
+    MLB schedule endpoint applies date boundaries in the supplied timezone.
+    For Taiwan operations, local date 2026-04-02 maps to official MLB date
+    2026-04-01 (15 games), while default API timezone would return 4 games.
+    """
+    try:
+        payload = _request_schedule_json(target_date, schedule_tz)
+    except Exception as exc:
+        logging.warning("schedule context lookup failed for %s (%s): %s", target_date, schedule_tz, exc)
+        return target_date, []
+
+    game_ids: List[int] = []
+    date_counts: Dict[date, int] = {}
+
+    for date_block in payload.get("dates", []):
+        block_date_raw = date_block.get("date")
+        for g in date_block.get("games", []):
+            pk = g.get("gamePk")
+            if pk is not None:
+                try:
+                    game_ids.append(int(pk))
+                except Exception:
+                    pass
+
+            official_raw = g.get("officialDate") or block_date_raw
+            try:
+                official_dt = date.fromisoformat(str(official_raw))
+            except Exception:
+                continue
+            date_counts[official_dt] = date_counts.get(official_dt, 0) + 1
+
+    # de-dup while preserving order
+    uniq_ids: List[int] = []
+    seen = set()
+    for gid in game_ids:
+        if gid in seen:
+            continue
+        seen.add(gid)
+        uniq_ids.append(gid)
+
+    effective_date = target_date
+    if date_counts:
+        effective_date = sorted(date_counts.items(), key=lambda x: (-x[1], x[0]))[0][0]
+
+    return effective_date, uniq_ids
+
+
+# ---------------------
 # Loaders
 # ---------------------
 
-def load_games(engine, target_date: date) -> pd.DataFrame:
+def load_games(engine, target_date: date, game_ids: Optional[Sequence[int]] = None) -> pd.DataFrame:
+    game_ids = [int(x) for x in (game_ids or []) if x is not None]
+
+    if game_ids:
+        sql = text(
+            """
+            SELECT g.id AS game_id,
+                   g.mlb_game_id,
+                   g.game_date,
+                   g.game_datetime,
+                   th.mlb_team_id AS home_team_id,
+                   ta.mlb_team_id AS away_team_id,
+                   th.name AS home_team_name,
+                   ta.name AS away_team_name,
+                   g.status
+              FROM games g
+              JOIN teams th ON th.id = g.home_team_id
+              JOIN teams ta ON ta.id = g.away_team_id
+             WHERE g.mlb_game_id = ANY(:game_ids)
+             ORDER BY g.game_date, g.game_datetime, g.mlb_game_id
+            """
+        )
+        return pd.read_sql(sql, engine, params={"game_ids": game_ids})
+
     sql = text(
         """
         SELECT g.id AS game_id,
@@ -476,6 +567,7 @@ def load_games(engine, target_date: date) -> pd.DataFrame:
           JOIN teams th ON th.id = g.home_team_id
           JOIN teams ta ON ta.id = g.away_team_id
          WHERE g.game_date = :target_date
+         ORDER BY g.game_date, g.game_datetime, g.mlb_game_id
         """
     )
     return pd.read_sql(sql, engine, params={"target_date": target_date})
@@ -529,7 +621,23 @@ def load_pitching(engine, since_date: date, target_date: date) -> pd.DataFrame:
     return pd.read_sql(sql, engine, params={"since_date": since_date, "target_date": target_date})
 
 
-def load_results(engine, target_date: date) -> pd.DataFrame:
+def load_results(engine, target_date: date, game_ids: Optional[Sequence[int]] = None) -> pd.DataFrame:
+    game_ids = [int(x) for x in (game_ids or []) if x is not None]
+    if game_ids:
+        sql = text(
+            """
+            SELECT g.mlb_game_id,
+                   r.home_score,
+                   r.away_score,
+                   r.home_win,
+                   r.total_points
+              FROM game_results r
+              JOIN games g ON g.id = r.game_id
+             WHERE g.mlb_game_id = ANY(:game_ids)
+            """
+        )
+        return pd.read_sql(sql, engine, params={"game_ids": game_ids})
+
     sql = text(
         """
         SELECT g.mlb_game_id,
@@ -545,7 +653,28 @@ def load_results(engine, target_date: date) -> pd.DataFrame:
     return pd.read_sql(sql, engine, params={"target_date": target_date})
 
 
-def load_moneyline_odds(engine, target_date: date) -> pd.DataFrame:
+def load_moneyline_odds(engine, target_date: date, game_ids: Optional[Sequence[int]] = None) -> pd.DataFrame:
+    game_ids = [int(x) for x in (game_ids or []) if x is not None]
+    if game_ids:
+        sql = text(
+            """
+            SELECT o.game_id,
+                   o.selection,
+                   o.price,
+                   o.sportsbook,
+                   o.retrieved_at,
+                   th.name AS home_team_name,
+                   ta.name AS away_team_name
+              FROM odds o
+              JOIN games g ON g.id = o.game_id
+              JOIN teams th ON g.home_team_id = th.id
+              JOIN teams ta ON g.away_team_id = ta.id
+             WHERE g.mlb_game_id = ANY(:game_ids)
+               AND o.market = 'moneyline'
+            """
+        )
+        return pd.read_sql(sql, engine, params={"game_ids": game_ids})
+
     sql = text(
         """
         SELECT o.game_id,
@@ -642,7 +771,23 @@ def load_bullpen_fatigue(engine, target_date: date) -> pd.DataFrame:
     return pd.read_sql(sql, engine, params={"target_date": target_date})
 
 
-def load_game_weather(engine, target_date: date) -> pd.DataFrame:
+def load_game_weather(engine, target_date: date, game_ids: Optional[Sequence[int]] = None) -> pd.DataFrame:
+    game_ids = [int(x) for x in (game_ids or []) if x is not None]
+    if game_ids:
+        sql = text(
+            """
+            SELECT w.mlb_game_id,
+                   w.temperature_c AS weather_temperature_c,
+                   w.relative_humidity AS weather_relative_humidity,
+                   w.wind_speed AS weather_wind_speed,
+                   w.wind_direction AS weather_wind_direction
+              FROM game_weather w
+              JOIN games g ON g.mlb_game_id = w.mlb_game_id
+             WHERE g.mlb_game_id = ANY(:game_ids)
+            """
+        )
+        return pd.read_sql(sql, engine, params={"game_ids": game_ids})
+
     sql = text(
         """
         SELECT w.mlb_game_id,
@@ -1329,17 +1474,36 @@ def build_features(
     ewm_spans: Sequence[int] = (5, 15, 30),
 ) -> pd.DataFrame:
     engine = get_engine()
-    since_date = target_date - timedelta(days=400)
 
-    games = load_games(engine, target_date)
-    batting = load_batting(engine, since_date, target_date)
-    pitching = load_pitching(engine, since_date, target_date)
+    effective_date, schedule_game_ids = resolve_schedule_context(target_date, DEFAULT_SCHEDULE_TIMEZONE)
+    if effective_date != target_date:
+        logging.info(
+            "Resolved schedule date %s (%s) -> MLB official date %s (%d games)",
+            target_date,
+            DEFAULT_SCHEDULE_TIMEZONE,
+            effective_date,
+            len(schedule_game_ids),
+        )
+
+    since_date = effective_date - timedelta(days=400)
+
+    games = load_games(engine, effective_date, game_ids=schedule_game_ids)
+    if games.empty and schedule_game_ids:
+        logging.warning("No DB games matched schedule IDs for %s; fallback to game_date query.", target_date)
+        games = load_games(engine, effective_date)
+    if not games.empty and "mlb_game_id" in games.columns:
+        games = games.sort_values(["game_date", "game_datetime", "mlb_game_id"]).drop_duplicates(
+            subset=["mlb_game_id"], keep="last"
+        )
+
+    batting = load_batting(engine, since_date, effective_date)
+    pitching = load_pitching(engine, since_date, effective_date)
     if not batting.empty and "game_date" in batting.columns:
         batting["game_date"] = pd.to_datetime(batting["game_date"]).dt.date
     if not pitching.empty and "game_date" in pitching.columns:
         pitching["game_date"] = pd.to_datetime(pitching["game_date"]).dt.date
     try:
-        starters = load_starting_pitchers(engine, since_date, target_date)
+        starters = load_starting_pitchers(engine, since_date, effective_date)
     except Exception:
         logging.warning("starting_pitchers table not ready; skipping starter features.")
         starters = pd.DataFrame()
@@ -1361,7 +1525,7 @@ def build_features(
     bullpen_prev = build_bullpen_prev_innings(pitching, starters)
 
     try:
-        win_pct_diff = build_home_away_win_pct_diff(engine, target_date)
+        win_pct_diff = build_home_away_win_pct_diff(engine, effective_date)
     except Exception:
         logging.warning("win pct diff feature unavailable; skipping.")
         win_pct_diff = {}
@@ -1373,7 +1537,7 @@ def build_features(
         ],
         ignore_index=True,
     )
-    rest_days = compute_rest_days(team_dates, target_date)
+    rest_days = compute_rest_days(team_dates, effective_date)
 
     # Merge features into games
     features = games.copy()
@@ -1450,7 +1614,7 @@ def build_features(
         )
 
     if not starter_metrics.empty:
-        starter_today = starter_metrics[starter_metrics["game_date"] == pd.to_datetime(target_date)]
+        starter_today = starter_metrics[starter_metrics["game_date"] == pd.to_datetime(effective_date)]
         home_starters = starter_today[starter_today["is_home"]].rename(
             columns={
                 "starter_kbb_last3": "home_starter_kbb_last3",
@@ -1524,7 +1688,7 @@ def build_features(
     features["away_win_pct_diff"] = features["away_team_id"].map(win_pct_diff)
 
     try:
-        recent_form = load_recent_team_form(engine, target_date, window=5)
+        recent_form = load_recent_team_form(engine, effective_date, window=5)
         if not recent_form.empty:
             recent_form["team_id"] = pd.to_numeric(recent_form["team_id"], errors="coerce")
 
@@ -1558,7 +1722,7 @@ def build_features(
     except Exception:
         logging.warning("recent team form feature unavailable; skipping.")
 
-    season = target_date.year
+    season = effective_date.year
 
     # Statcast batter EV/LA/Barrel% (team-level)
     try:
@@ -1580,11 +1744,11 @@ def build_features(
     # Statcast pitcher K/BB%, SwStr%, vs L/R matchup
     try:
         if not starter_metrics.empty:
-            starter_today = starter_metrics[starter_metrics["game_date"] == pd.to_datetime(target_date)]
+            starter_today = starter_metrics[starter_metrics["game_date"] == pd.to_datetime(effective_date)]
             pitcher_ids = list(starter_today["pitcher_mlb_id"].dropna().unique())
             if pitcher_ids:
-                start_dt = target_date - timedelta(days=45)
-                pitcher_metrics = fetch_pitcher_statcast_metrics(pitcher_ids, start_dt, target_date)
+                start_dt = effective_date - timedelta(days=45)
+                pitcher_metrics = fetch_pitcher_statcast_metrics(pitcher_ids, start_dt, effective_date)
                 if not pitcher_metrics.empty:
                     pmap = pitcher_metrics.set_index("pitcher_mlb_id")
                     for metric in [
@@ -1619,7 +1783,7 @@ def build_features(
 
     # Taiwan Sports Lottery moneyline odds (for model features)
     try:
-        odds = load_moneyline_odds(engine, target_date)
+        odds = load_moneyline_odds(engine, effective_date, game_ids=schedule_game_ids)
         if not odds.empty:
             odds = odds.copy()
             if "sportsbook" in odds.columns:
@@ -1666,11 +1830,11 @@ def build_features(
     try:
         team_fatigue = pd.DataFrame()
         if table_exists(engine, "bullpen_fatigue"):
-            team_fatigue = load_bullpen_fatigue(engine, target_date)
+            team_fatigue = load_bullpen_fatigue(engine, effective_date)
         if team_fatigue.empty:
             from bullpen_fatigue import compute_team_fatigue
 
-            team_fatigue, _ = compute_team_fatigue(engine, target_date, window_days=5)
+            team_fatigue, _ = compute_team_fatigue(engine, effective_date, window_days=5)
         if not team_fatigue.empty:
             fatigue_map = team_fatigue.set_index("team_mlb_id")["bullpen_fatigue_index"].to_dict()
             features["home_bullpen_fatigue_index"] = features["home_team_id"].map(fatigue_map)
@@ -1682,7 +1846,7 @@ def build_features(
     try:
         weather = pd.DataFrame()
         if table_exists(engine, "game_weather"):
-            weather = load_game_weather(engine, target_date)
+            weather = load_game_weather(engine, effective_date, game_ids=schedule_game_ids)
         if not weather.empty:
             for col in [
                 "weather_temperature_c",
@@ -1702,7 +1866,7 @@ def build_features(
 
     # Add labels if results exist
     try:
-        results = load_results(engine, target_date)
+        results = load_results(engine, effective_date, game_ids=schedule_game_ids)
         if not results.empty:
             features = features.merge(results, how="left", on="mlb_game_id")
     except Exception:
@@ -1755,7 +1919,7 @@ def build_features(
         features["target"] = target
 
     try:
-        features = apply_prior_season_proxy_features(features, engine, target_date)
+        features = apply_prior_season_proxy_features(features, engine, effective_date)
     except Exception:
         logging.warning("prior season proxy feature unavailable; skipping.")
 
@@ -1855,6 +2019,10 @@ def build_features(
     for col in optional_cols:
         if col not in features.columns:
             features[col] = pd.NA
+
+    if "game_date" in features.columns:
+        features["mlb_game_date"] = pd.to_datetime(features["game_date"], errors="coerce").dt.date
+        features["game_date"] = target_date
 
     return features
 
